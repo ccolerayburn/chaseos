@@ -1,0 +1,206 @@
+Proceed with Phase 1 for ChaseOS.
+
+Use the Phase 0 plan, with the following decisions locked in:
+
+Project location:
+Create ChaseOS as a separate sibling project at:
+c:\_Claude Code\chaseos
+
+Do not modify or mix this into the existing xray/xray-app project.
+
+Packaging:
+Use a src-layout package:
+chaseos/
+  src/
+    chaseos/
+      __init__.py
+      __main__.py
+
+The app should eventually run with:
+python -m chaseos
+
+Task:
+Create the initial project scaffold and AGENTS.md. Do not implement the full app yet.
+
+Create this structure:
+
+chaseos/
+  README.md
+  AGENTS.md
+  pyproject.toml
+  .gitignore
+
+  src/
+    chaseos/
+      __init__.py
+      __main__.py
+
+      app/
+        __init__.py
+        tray_app.py
+        terminal_window.py
+        command_router.py
+        app_state.py
+
+      ritual/
+        __init__.py
+        startup_sequence.py
+        timer.py
+        stages.py
+        prompts.py
+
+      interpretation/
+        __init__.py
+        checkin_interpreter.py
+        practical_signals.py
+        safety_rules.py
+
+      theming/
+        __init__.py
+        theme_generator.py
+        theme_models.py
+        palettes.py
+        theme_history.py
+
+      poster/
+        __init__.py
+        public_poster_engine.py
+        quote_engine.py
+        poster_renderer.py
+        poster_archive.py
+        poster_safety.py
+
+      wallpaper/
+        __init__.py
+        wallpaper_renderer.py
+        wallpaper_composer.py
+        photo_source.py
+        photo_indexer.py
+        photo_selector.py
+        wallpaper_manifest.py
+
+      windows/
+        __init__.py
+        display_detection.py
+        wallpaper_applier.py
+        tray.py
+        startup_shortcut.py
+
+      storage/
+        __init__.py
+        paths.py
+        settings_store.py
+        daily_run_store.py
+        asset_manifest.py
+
+      memory/
+        __init__.py
+        feedback_store.py
+        learned_preferences.py
+
+      verses/
+        __init__.py
+        verse_selector.py
+        public_domain_verses.py
+
+      models/
+        __init__.py
+        checkin.py
+        signals.py
+        theme.py
+        assets.py
+        ritual.py
+        settings.py
+        poster.py
+        monitor.py
+        memory.py
+
+  tests/
+    unit/
+      test_command_router.py
+      test_checkin_interpreter.py
+      test_redaction.py
+      test_theme_generator.py
+      test_poster_safety.py
+      test_timer.py
+
+    integration/
+      test_startup_sequence.py
+      test_poster_public_safety.py
+      test_wallpaper_render_outputs.py
+
+Requirements:
+1. Create pyproject.toml for Python 3.11+.
+2. Add dependencies:
+   - PySide6
+   - Pillow
+   - pydantic
+3. Add dev dependencies:
+   - pytest
+   - pytest-cov
+   - ruff
+4. Configure pytest.
+5. Configure ruff with reasonable defaults.
+6. Create __main__.py with a temporary placeholder entrypoint.
+7. Running `python -m chaseos` should print a placeholder message for now:
+   "ChaseOS scaffold ready."
+8. Add a README with:
+   - project overview
+   - setup instructions
+   - run command
+   - test command
+   - current MVP scope
+   - privacy/safety boundaries
+9. Add AGENTS.md with durable project instructions.
+
+AGENTS.md must include:
+- ChaseOS overview
+- Product principles
+- UI rules
+- Privacy and safety rules
+- Public poster rules
+- Monitor layout rules
+- Local photo source rules
+- Testing expectations
+- Runtime storage expectations
+- Coding standards
+- Done criteria
+
+Important product rules:
+- ChaseOS is an on-demand Windows tray app.
+- UI is a small terminal-style dark command window.
+- Dark gray background.
+- Muted darker yellow/amber monospaced text.
+- No dashboard UI.
+- No visual theme preview.
+- ChaseOS describes the generated theme in text and asks for approval.
+- User can type commands such as /approve, /change calmer, /regenerate.
+- The full ritual target is 15 minutes.
+- Do not implement formal ADHD, depression, or anxiety questionnaires.
+- Do not diagnose the user.
+- Do not use clinical labels.
+- Interpret check-ins only into practical signals:
+  energy, clarity, pressure, mood_weight, focus_friction, body_context, social_battery, readiness.
+- Public poster must never include private check-in details.
+- Public poster is based only on the innovation exercise takeaway.
+- Display 1 is the public portrait monitor and uses a 1080x1920 public innovation poster.
+- Display 4 is left atmosphere.
+- Display 2 is center command.
+- Display 3 is right inspiration.
+- Local photo source:
+  C:\_Media\Photos\Lightroom\Export
+- General local photos must not be used on Display 1 by default.
+- Runtime generated files should eventually go under:
+  %LOCALAPPDATA%\ChaseOS
+- Do not require admin rights.
+- Do not apply wallpapers yet.
+- Do not call OpenAI yet.
+- Do not modify registry settings.
+- Do not modify taskbar pins or icons yet.
+
+Done when:
+- The scaffold exists.
+- `python -m chaseos` works and prints the placeholder message.
+- `pytest` runs successfully.
+- README exists.
+- AGENTS.md exists and captures the project rules.

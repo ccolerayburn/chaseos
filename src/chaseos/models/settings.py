@@ -1,0 +1,2 @@
+"""Future settings Pydantic models."""
+

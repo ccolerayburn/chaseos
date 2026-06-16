@@ -1,0 +1,465 @@
+Phase 7: Add Lightroom photo indexing, selection, and hybrid private wallpapers.
+
+Context:
+Phase 1 created the ChaseOS scaffold.
+Phase 2 created the PySide6 tray shell and terminal window.
+Phase 3 added the text-only 15-minute ritual state machine.
+Phase 4 added local deterministic check-in interpretation and real theme planning.
+Phase 5 added the Display 1 Daily Public Innovation Poster engine.
+Phase 6 added generated private wallpapers for Displays 4, 2, and 3.
+A Phase 6 helper update added optional four-image generation, including a Display 1 public_signal placeholder.
+
+Project location:
+C:\_Codex\chaseos
+
+Run command:
+python -m chaseos
+
+Respect all rules in AGENTS.md.
+
+Goal:
+Add local photo indexing and selection from the user's Lightroom export folder, then integrate selected photos into private monitor wallpapers as hybrid photo/cyberpunk wallpapers.
+
+Local photo source:
+C:\_Media\Photos\Lightroom\Export
+
+Primary use:
+- Display 4: Left Atmosphere Monitor, good candidate for photo/hybrid wallpaper.
+- Display 3: Right Inspiration Monitor, good candidate for photo/hybrid wallpaper.
+- Display 2: Center Command Monitor, usually generated minimal; photo usage should remain low.
+- Display 1: Public Signal Monitor, must not use the general Lightroom photo folder by default.
+
+Important Display 1 rule:
+- Display 1 should use the real approved Phase 5 public innovation poster when available.
+- The Display 1 public_signal placeholder from the four-image helper is only a fallback when no real public poster exists.
+- Do not overwrite an approved public poster with the placeholder during the normal ritual.
+
+Do not implement:
+- OpenAI calls
+- AI image generation
+- Windows wallpaper application
+- real monitor detection
+- registry changes
+- taskbar icon changes
+- clinical questionnaires
+- diagnosis language
+
+Important privacy rule:
+The general Lightroom folder must not be used on Display 1 by default.
+Display 1 remains the public 1080x1920 innovation poster from Phase 5.
+
+Photo privacy:
+Local photos may contain private people, places, homes, documents, or personal details.
+Therefore:
+- General local photos are private-monitor-only.
+- Public monitor photo usage must require an explicit future setting and is not part of this phase.
+- Do not send photo paths, metadata, or image content to any external service.
+- Do not infer identities or personal details from photos.
+- Do not run face recognition.
+- Do not run OCR.
+- Do not create public-facing content from general photos.
+
+Architecture:
+Use or update these modules:
+
+src/chaseos/wallpaper/photo_source.py
+- Define PhotoSourceConfig model/helper if needed.
+- Default path:
+  C:\_Media\Photos\Lightroom\Export
+- recursive: true
+- supported formats:
+  .jpg, .jpeg, .png, .webp
+- allow_public_use: false
+
+src/chaseos/wallpaper/photo_indexer.py
+- Implement PhotoLibraryIndexer.
+- Recursively scan configured photo folders.
+- Store index JSON under:
+  %LOCALAPPDATA%\ChaseOS\photo_index\photo_index.json
+- In tests, allow temp base paths.
+- Do not crash if source folder is missing.
+- Do not crash on corrupt/unreadable images.
+- Do not require EXIF parsing.
+- Use Pillow for image metadata.
+
+src/chaseos/wallpaper/photo_selector.py
+- Implement PhotoSelector.
+- Select private monitor photo candidates based on:
+  - orientation
+  - size
+  - brightness
+  - saturation
+  - average color
+  - theme palette compatibility
+  - last_used_date
+  - avoid repeats window
+- Prefer landscape images for Displays 4, 2, and 3.
+- Prefer recently unused images.
+- Match photos roughly to current theme colors.
+- Never assign general photos to Display 1.
+
+src/chaseos/wallpaper/wallpaper_renderer.py
+- Add hybrid photo rendering support.
+- Render selected photo into target wallpaper size:
+  - crop to fill
+  - preserve aspect ratio
+  - apply theme-tinted overlay
+  - adjust brightness/contrast subtly
+  - add low-opacity cyberpunk linework/grid/geometry
+  - ensure wallpaper remains non-distracting
+- Do not render photo file paths or private metadata onto the image.
+- Do not render text onto private wallpapers.
+
+src/chaseos/wallpaper/wallpaper_composer.py
+- Use PhotoSelector when ThemePlan local_photo_usage says hybrid or local_photo.
+- If photo source missing or no valid photos, fall back to generated wallpaper.
+- Save chosen photo paths only in private manifest metadata.
+- Do not include photo paths in terminal output unless user asks with a specific command.
+- Preserve the approved Display 1 public poster path when available.
+- Use Display 1 placeholder only when there is no approved poster path.
+
+src/chaseos/wallpaper/wallpaper_manifest.py
+- Extend manifest to include:
+  - photo_index_used: true/false
+  - selected_photo_source_path, private metadata only
+  - selected_photo_path per private display, private metadata only
+  - fallback_reason if generated fallback was used
+  - public_monitor_uses_general_photos: false
+  - display_1_source: approved_public_poster | placeholder_public_signal
+
+src/chaseos/storage/paths.py
+- Add:
+  get_photo_index_dir()
+  get_photo_index_path()
+
+src/chaseos/ritual/startup_sequence.py
+- Add commands:
+  /photos
+  /index photos
+  /photo source
+- /photos should show photo library status:
+  - configured path
+  - index exists yes/no
+  - number of indexed images
+  - last indexed timestamp
+  - public use: disabled
+- /index photos should run photo indexing.
+- /photo source should print the configured source path.
+- During wallpaper generation, use existing index if present.
+- If no index exists, attempt a quick index if the configured folder exists.
+- If indexing fails or folder is missing, continue with generated wallpapers.
+
+Models:
+Add or update models in src/chaseos/models/assets.py or a new model file:
+
+PhotoAsset:
+- path
+- width
+- height
+- orientation: landscape | portrait | square
+- average_color: hex or tuple
+- brightness: float
+- saturation: float
+- indexed_at
+- last_used_date: optional
+- source_name
+- file_size_bytes optional
+- valid: bool
+
+PhotoIndex:
+- source_path
+- recursive
+- indexed_at
+- photo_count
+- photos: list[PhotoAsset]
+
+PhotoSelection:
+- display_id
+- role
+- selected_photo_path optional
+- selection_reason
+- fallback_used: bool
+- fallback_reason optional
+
+Photo source behavior:
+Default config:
+- path: C:\_Media\Photos\Lightroom\Export
+- recursive: true
+- avoid_repeats_days: 30
+- allow_public_use: false
+- enabled: true
+
+If source folder does not exist:
+- /photos prints:
+  chaseos> photo source not found. generated wallpapers will be used.
+- wallpaper generation continues with generated wallpapers.
+
+If source folder exists:
+- /index photos scans it.
+- /photos reports count.
+- Wallpaper generation may use photos for Display 4 and Display 3 based on ThemePlan and constraints.
+
+Theme/local photo rules:
+Respect ThemePlan local_photo_usage:
+- display_4:
+  generated | local_photo | hybrid
+- display_2:
+  generated | local_photo | hybrid
+- display_3:
+  generated | local_photo | hybrid
+
+Default behavior:
+- Display 4 may use hybrid.
+- Display 2 usually generated.
+- Display 3 may use hybrid.
+- Display 1 always uses the public innovation poster, never general local photos.
+
+Additional constraints:
+1. If body_context contains headache, sensory_load, fatigue, or low_sleep:
+   - prefer generated or very subdued hybrid.
+   - reduce photo contrast and overlay intensity.
+   - avoid busy photos if possible.
+
+2. If visual_density is very_sparse:
+   - avoid busy photos.
+   - prefer generated or heavily softened hybrid.
+
+3. If user requested "use more local photos":
+   - use hybrid/local photos on Displays 4 and 3 if available.
+   - do not use photos on Display 1.
+   - Display 2 remains generated unless explicitly requested in a future phase.
+
+4. If user requested "no photos today" or "generated only":
+   - do not use photos on Displays 4, 2, or 3.
+
+5. If no suitable landscape photos exist:
+   - use generated fallback.
+
+Photo indexing details:
+For each valid image:
+- open with Pillow
+- get width/height
+- determine orientation
+- compute average color efficiently, using resized image thumbnail
+- compute brightness
+- compute saturation
+- store normalized values
+- avoid loading enormous images at full size when possible
+- catch errors and continue
+
+Average color:
+- Resize to a small thumbnail, such as 32x32.
+- Convert to RGB.
+- Compute average R/G/B.
+
+Brightness:
+- Use average luminance or simple formula:
+  0.2126 R + 0.7152 G + 0.0722 B
+
+Saturation:
+- Simple HSV-based average or approximate max-min difference normalized.
+
+Color matching:
+Use simple color distance between photo average color and theme primary/accent colors.
+It does not need to be perfect. It just needs to avoid obviously clashing images.
+
+Hybrid wallpaper rendering:
+For hybrid mode:
+1. Load selected photo.
+2. Crop/resize to exact target size.
+3. Apply dark overlay based on theme background/surface.
+4. Apply subtle color tint using theme primary/accent.
+5. Add geometric linework consistent with display role.
+6. Save as PNG.
+7. Preserve no EXIF in output.
+
+For local_photo mode:
+- Still crop/resize and apply mild theme overlay.
+- Keep photo more visible than hybrid mode.
+- Save as PNG.
+- Preserve no EXIF in output.
+
+Terminal output:
+During wallpaper generation:
+- Do not print full photo file paths by default.
+- Print concise summary:
+
+PHOTO SOURCE
+configured ...... C:\_Media\Photos\Lightroom\Export
+indexed ......... yes
+images .......... 248
+
+PRIVATE WALLPAPERS
+display 4 ....... hybrid photo atmosphere
+display 2 ....... generated center command
+display 3 ....... hybrid photo inspiration
+
+If missing:
+PHOTO SOURCE
+configured ...... C:\_Media\Photos\Lightroom\Export
+indexed ......... no
+status .......... source folder not found; using generated wallpapers
+
+Command output:
+/photos:
+PHOTO LIBRARY
+source .......... C:\_Media\Photos\Lightroom\Export
+recursive ....... true
+public use ...... disabled
+index exists .... yes
+images .......... 248
+last indexed .... 2026-06-15 08:02
+
+/index photos:
+chaseos> indexing local photo source...
+chaseos> indexed 248 images.
+chaseos> public monitor photo usage remains disabled.
+
+Do not expose individual photo paths in normal terminal output.
+A future debug command can handle that if needed.
+
+Manifest:
+wallpaper_manifest.json should now include:
+- photo_index_used
+- private_selected_photos object:
+  display_4:
+    selected_photo_path
+    source
+    mode
+    fallback_used
+    fallback_reason
+  display_2:
+    selected_photo_path
+    source
+    mode
+    fallback_used
+    fallback_reason
+  display_3:
+    selected_photo_path
+    source
+    mode
+    fallback_used
+    fallback_reason
+- public_monitor_uses_general_photos: false
+- display_1_source: approved_public_poster | placeholder_public_signal
+- applied_to_windows: false
+
+Security/privacy:
+- Do not write photo paths to public poster metadata.
+- Do not write photo paths into public poster image.
+- Do not use general photos on Display 1.
+- Do not send anything externally.
+- Strip EXIF from generated output by saving new PNGs.
+- Do not perform OCR.
+- Do not perform face recognition.
+- Do not classify people in photos.
+
+Testing:
+Add/update tests without launching GUI.
+
+Photo indexer tests:
+1. Missing source folder is handled gracefully.
+2. Temp folder with JPG/PNG images indexes successfully.
+3. Unsupported files are ignored.
+4. Corrupt image is skipped without crash.
+5. Photo dimensions are stored.
+6. Orientation is calculated.
+7. Average color is calculated.
+8. Brightness and saturation are calculated.
+9. Index JSON saves and loads.
+10. Public use is false by default.
+
+Photo selector tests:
+1. Never assigns general photo to Display 1.
+2. Prefers landscape photos for private landscape monitors.
+3. Avoids recently used photos when possible.
+4. Falls back gracefully when no valid photo exists.
+5. Honors "no photos today" / generated-only mode.
+6. Honors "use more local photos" for Displays 4 and 3.
+7. Display 2 remains generated by default.
+8. Selection includes fallback reasons.
+
+Hybrid renderer tests:
+1. Hybrid wallpaper renders at exact 1920x1080.
+2. Local photo wallpaper renders at exact 1920x1080.
+3. Output PNG contains no EXIF metadata.
+4. Renderer works with temp image files.
+5. Renderer falls back to generated wallpaper if photo path is missing.
+6. Display 2 remains lowest visual-noise when generated.
+
+Composer tests:
+1. Composer uses photo index when available.
+2. Composer falls back when photo source missing.
+3. Composer generates all three private wallpapers.
+4. Manifest includes selected photo metadata privately.
+5. Manifest says public_monitor_uses_general_photos false.
+6. Manifest does not include raw check-in.
+7. Manifest does not include public poster quote.
+8. Manifest does not include innovation takeaway.
+9. Generated output files exist and are valid PNGs.
+10. Approved Display 1 public poster is preserved when available.
+11. Display 1 placeholder is used only when no approved poster exists.
+
+StartupSequence tests:
+1. /photos reports missing source gracefully.
+2. /index photos command is recognized.
+3. /photo source prints configured source.
+4. Full happy path still reaches COMPLETE.
+5. If test photo index exists, wallpaper generation can use hybrid photos on Displays 4 and 3.
+6. /wallpapers output still works.
+7. /status includes photo index status if available.
+
+README update:
+Update README with:
+- Phase 7 status
+- Local Lightroom photo source:
+  C:\_Media\Photos\Lightroom\Export
+- Photo privacy rules
+- Display 1 public photo restriction
+- Display 1 placeholder fallback behavior
+- /photos command
+- /index photos command
+- /photo source command
+- Hybrid private wallpaper behavior
+- Current limitations:
+  - no OpenAI yet
+  - no real monitor detection yet
+  - no Windows wallpaper application yet
+  - no public use of general photos
+  - no face recognition
+  - no OCR
+
+Important restrictions:
+- Do not call OpenAI.
+- Do not use external services.
+- Do not apply wallpapers to Windows.
+- Do not modify registry settings.
+- Do not modify taskbar pins or icons.
+- Do not use general photos on Display 1.
+- Do not perform face recognition.
+- Do not perform OCR.
+- Do not add clinical questionnaires.
+- Do not diagnose the user.
+- Do not use clinical labels in output.
+- Do not require admin rights.
+
+Done criteria:
+1. `python -m chaseos` launches the app.
+2. /photos reports photo library status.
+3. /photo source prints the configured path.
+4. /index photos indexes the configured folder if present.
+5. Missing photo source does not break ritual flow.
+6. Private wallpaper generation can use hybrid local photos for Displays 4 and 3.
+7. Display 2 remains generated/minimal by default.
+8. Display 1 never uses the general photo folder.
+9. Approved Display 1 public poster is preserved when available.
+10. Display 1 placeholder is fallback only.
+11. Generated hybrid wallpapers are exact target sizes.
+12. Output PNGs do not preserve EXIF metadata.
+13. Manifest includes private photo selection metadata.
+14. Manifest marks public_monitor_uses_general_photos false.
+15. Full ritual still completes.
+16. Unit tests pass.
+17. Full pytest suite passes.
+18. Ruff check passes.
+19. README is updated.

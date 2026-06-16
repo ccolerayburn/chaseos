@@ -1,0 +1,586 @@
+Phase 4: Implement local check-in interpretation and real theme planning.
+
+Context:
+Phase 1 created the ChaseOS scaffold.
+Phase 2 created the PySide6 tray shell and terminal window.
+Phase 3 added the text-only 15-minute ritual state machine.
+
+Project location:
+C:\_Codex\chaseos
+
+Run command:
+python -m chaseos
+
+Respect all rules in AGENTS.md.
+
+Goal:
+Replace the Phase 3 placeholder interpretation and theme plan with real local deterministic logic.
+
+This phase should make ChaseOS interpret the user's free-text answer to:
+"how are you, really?"
+
+Then ChaseOS should produce:
+1. Practical non-clinical signals.
+2. A startup mode.
+3. A concise user-facing interpretation summary.
+4. A real text-described cyberpunk/minimal theme plan.
+5. A real approval/change/regenerate loop for the theme plan.
+
+Do not implement:
+- OpenAI calls
+- image generation
+- poster image generation
+- Lightroom indexing
+- wallpaper generation
+- wallpaper application
+- registry changes
+- taskbar icon changes
+- clinical questionnaires
+- diagnosis language
+
+Important product boundary:
+ChaseOS must not diagnose the user.
+ChaseOS must not use clinical labels.
+ChaseOS must not output ADHD, depression, anxiety, disorder, symptoms elevated, screening, score, or diagnosis language.
+
+Allowed practical language:
+- low energy
+- medium energy
+- high energy
+- clear
+- foggy
+- scattered
+- overloaded
+- pressure
+- heavy mood
+- starting friction
+- switching friction
+- finishing friction
+- prioritizing friction
+- body load
+- social battery
+- needs calm
+- needs structure
+- needs momentum
+- needs focus
+- ready
+
+Input examples:
+The user may type things like:
+- "slept bad, foggy, hungry, scattered. need to get through tickets without making a mess."
+- "wired and restless but motivated."
+- "low and heavy today, need a gentle start."
+- "clear and focused, want deep work."
+- "ticket queue is already on fire."
+- "headache, too much caffeine, too much noise."
+- "I feel anxious."
+- "I feel depressed."
+- "ADHD brain is loud today."
+
+Output must reframe those into practical non-clinical signals.
+For example:
+- "I feel anxious" -> pressure: high, readiness: needs_calm
+- "I feel depressed" -> mood_weight: heavy, readiness: needs_calm or needs_structure
+- "ADHD brain is loud today" -> clarity: scattered, focus_friction: starting or prioritizing
+Do not echo the clinical word back in the summary.
+
+Architecture:
+
+Use or update these modules:
+
+src/chaseos/models/signals.py
+- Define PracticalSignals model.
+- Use enums or constrained strings where reasonable.
+
+src/chaseos/models/theme.py
+- Define ThemePlan model.
+- Define ThemeFamily enum or constants.
+- Define ThemePalette model if useful.
+- Define MonitorThemePlan if useful.
+
+src/chaseos/interpretation/checkin_interpreter.py
+- Implement LocalCheckInInterpreter.
+- Input:
+  - raw_check_in: str
+  - optional tags: list[str] = []
+  - optional requested_need: str | None = None
+- Output:
+  - PracticalSignals
+  - startup_mode
+  - user_facing_summary
+  - confidence or rule_matches if useful
+
+src/chaseos/interpretation/practical_signals.py
+- Shared signal constants/enums/helpers.
+
+src/chaseos/interpretation/safety_rules.py
+- Add helpers to detect forbidden clinical output.
+- Add helper:
+  ensure_non_clinical_text(text: str) -> str
+  or similar.
+- Add tests that summaries and theme descriptions do not contain forbidden clinical labels.
+
+src/chaseos/theming/palettes.py
+- Define theme palettes.
+
+src/chaseos/theming/theme_models.py
+- Define theme-related dataclasses/Pydantic models if not placed in models/theme.py.
+
+src/chaseos/theming/theme_generator.py
+- Implement ThemeGenerator.
+- Input:
+  - PracticalSignals
+  - startup_mode
+  - date
+  - optional random salt
+  - optional change_requests
+  - optional regenerate_count
+- Output:
+  - ThemePlan
+  - terminal-friendly description text
+
+src/chaseos/ritual/startup_sequence.py
+- Replace placeholder interpretation with LocalCheckInInterpreter.
+- Replace placeholder theme plan with ThemeGenerator.
+- Preserve existing ritual flow.
+- Preserve approval/change/regenerate behavior.
+- Store detected signals and theme plan in the active session.
+
+Signal model:
+PracticalSignals should contain:
+
+energy:
+- low
+- medium
+- high
+- unknown
+
+clarity:
+- clear
+- foggy
+- scattered
+- overloaded
+- unknown
+
+pressure:
+- low
+- medium
+- high
+- unknown
+
+mood_weight:
+- light
+- neutral
+- heavy
+- unknown
+
+focus_friction:
+- starting
+- switching
+- finishing
+- prioritizing
+- avoiding
+- none
+- unknown
+
+body_context:
+- list[str]
+Allowed examples:
+  low_sleep
+  hungry
+  caffeine_only
+  too_much_caffeine
+  headache
+  sensory_load
+  fatigue
+  pain
+  hydrated
+  no_food
+  restless_body
+
+social_battery:
+- low
+- medium
+- high
+- unknown
+
+readiness:
+- needs_calm
+- needs_structure
+- needs_momentum
+- needs_focus
+- ready
+- unknown
+
+Startup modes:
+- Calm Start
+- Structured Start
+- Gentle Start
+- Momentum Start
+- Deep Work Start
+- Triage Start
+
+Local interpretation rules:
+1. Low energy:
+   Match words/phrases:
+   tired, exhausted, drained, wiped, slept bad, slept poorly, no sleep, low sleep, sleepy, fatigue, foggy and tired
+
+2. High energy:
+   wired, energized, hyped, restless, antsy, overclocked, too much coffee, too much caffeine
+
+3. Foggy clarity:
+   foggy, brain fog, slow, hazy, groggy, can't think, cannot think
+
+4. Scattered clarity:
+   scattered, all over, too many tabs, distracted, unfocused, jumping around, loud brain
+
+5. Overloaded clarity:
+   overwhelmed, too much, buried, overloaded, flooded, drowning
+
+6. High pressure:
+   anxious, stressed, pressure, panic, urgent, behind, overwhelmed, on fire, fire, chaos
+
+7. Heavy mood:
+   low, heavy, sad, discouraged, don't care, unmotivated, numb, depressed
+
+8. Body context:
+   hungry, no food, haven't eaten, caffeine only, headache, migraine, sensory, bright lights, pain, sick, nauseous, tired, fatigue, hydrated, water
+
+9. Social battery:
+   people, meetings, calls, social, customers, users, drained by people, don't want to talk
+
+10. Focus friction:
+   starting:
+     can't start, cannot start, hard to start, stuck, need to start, procrastinating
+   switching:
+     switching, context switching, bouncing, interruptions
+   finishing:
+     finishing, follow through, loose ends, wrap up
+   prioritizing:
+     priority, prioritize, too many things, what first, where to start
+   avoiding:
+     avoiding, putting off, dread, don't want to
+
+11. Work mode / triage:
+   tickets, queue, incidents, outage, escalation, triage, support, users, calls
+
+Requested need:
+If user says:
+- calm me down, calm, reduce noise, quiet -> readiness needs_calm
+- structure, organize, checklist, rails -> readiness needs_structure
+- get moving, momentum, sprint -> readiness needs_momentum
+- focus, deep work, lock in -> readiness needs_focus
+
+Startup mode selection rules:
+1. If heavy mood and low energy and not urgent:
+   Gentle Start.
+2. If high pressure or overloaded and user asks calm:
+   Calm Start.
+3. If scattered/foggy/starting/prioritizing:
+   Structured Start.
+4. If high energy/restless and pressure is not high:
+   Momentum Start.
+5. If clear/focused/ready:
+   Deep Work Start.
+6. If tickets/incidents/queue/urgent appear:
+   Triage Start unless pressure is high or overloaded, then Structured Start or Calm Start.
+7. If headache/sensory load:
+   prefer Calm Start or Structured Start with low intensity.
+8. If uncertain:
+   Structured Start.
+
+User-facing summary:
+Generate 2 to 4 concise terminal lines.
+Examples:
+- "I’m reading today as low energy, foggy clarity, and starting friction."
+- "I’ll keep the setup structured, sparse, and low-noise."
+- "Pressure looks elevated, so I’m avoiding redline chaos."
+- "Your first move should be small and concrete."
+
+Forbidden summary examples:
+- "You seem anxious."
+- "Your ADHD symptoms are elevated."
+- "This sounds like depression."
+- "Clinical score..."
+
+Theme families:
+- Obsidian Terminal
+- Neon Noir
+- Chrome Monolith
+- Violet Circuit
+- Redline Protocol
+- Arctic Interface
+- Synth Sanctuary
+- Synthetic Sunrise
+
+Theme plan model should include:
+- startup_mode
+- family
+- palette_label
+- colors:
+  - background
+  - surface
+  - primary
+  - secondary
+  - accent
+  - text
+- cyberpunk_intensity: float 0.0 to 1.0
+- visual_density:
+  - very_sparse
+  - sparse
+  - medium
+  - dense
+- motion:
+  - none
+  - minimal
+  - normal
+- icon_style
+- local_photo_usage:
+  display_4: generated | local_photo | hybrid
+  display_2: generated | local_photo | hybrid
+  display_3: generated | local_photo | hybrid
+- monitor_plan:
+  display_1: public innovation poster
+  display_4: left atmosphere
+  display_2: center command
+  display_3: right inspiration
+- notes: list[str]
+
+Theme selection rules:
+1. Calm Start:
+   Prefer Synth Sanctuary or Arctic Interface.
+   Intensity low.
+   Density sparse or very_sparse.
+   Motion none or minimal.
+
+2. Structured Start:
+   Prefer Obsidian Terminal or Chrome Monolith.
+   Intensity low-medium.
+   Density sparse.
+   Motion none or minimal.
+
+3. Gentle Start:
+   Prefer Synth Sanctuary or Synthetic Sunrise.
+   Intensity low.
+   Density very_sparse or sparse.
+   Motion none.
+
+4. Momentum Start:
+   Prefer Neon Noir or Violet Circuit.
+   Intensity medium-high.
+   Density medium.
+   Motion minimal or normal.
+
+5. Deep Work Start:
+   Prefer Chrome Monolith or Obsidian Terminal.
+   Intensity low-medium.
+   Density very_sparse or sparse.
+   Motion none.
+
+6. Triage Start:
+   Prefer Redline Protocol only when pressure is not high.
+   If pressure is high, use Obsidian Terminal or Synth Sanctuary instead.
+   Intensity medium unless pressure/body load requires lower.
+
+7. Headache/sensory/body load:
+   Lower intensity.
+   Lower density.
+   Avoid high red/orange.
+   Avoid dense neon.
+
+8. Low sleep/fatigue:
+   Prefer softer contrast and lower density.
+   Center display should be very minimal.
+
+9. Creative/high-energy:
+   Allow stronger cyberpunk intensity on Display 3.
+   Keep Display 2 readable and clean.
+
+10. Public Display 1:
+   Always public innovation poster.
+   Never use local general photos.
+   Never use private check-in details.
+
+Local photo usage rules for theme plan:
+- Display 4 usually allows hybrid if no sensory/headache issue.
+- Display 2 usually generated minimal.
+- Display 3 can be generated or hybrid.
+- If user requests "more local photos", set Display 4 and Display 3 to hybrid/local_photo.
+- If user requests "no photos", set Displays 4/2/3 to generated.
+- If user has headache/sensory load, prefer generated sparse over photos.
+- Display 1 always remains public innovation poster.
+
+Theme description:
+Render terminal-friendly text like:
+
+THEME PLAN
+mode ............ Structured Start
+family .......... Obsidian Terminal
+palette ......... graphite / muted amber / deep cyan
+intensity ....... 42%
+density ......... sparse
+motion .......... minimal
+icons ........... thin-line amber/cyan
+display 1 ....... public innovation poster
+display 4 ....... left atmosphere, hybrid photo overlay
+display 2 ....... center command, generated minimal
+display 3 ....... right inspiration, generated cyberpunk
+
+NOTES
+- center display stays low-noise for ticket work.
+- pressure is elevated, so redline styling is disabled.
+
+Change request behavior:
+Update /change handling in THEME_APPROVAL.
+
+Supported change intents:
+- calmer
+- more calm
+- tone it down
+- less intense
+- less visual noise
+- more minimal
+- more cyberpunk
+- more futuristic
+- more neon
+- more yellow
+- less cyan
+- use more local photos
+- no photos today
+- generated only
+- darker
+- brighter
+- more contrast
+- less contrast
+
+Rules:
+- /change calmer:
+  reduce intensity and density, prefer Synth Sanctuary or Arctic Interface.
+- /change more cyberpunk:
+  increase cyberpunk_intensity unless pressure/headache/sensory load is high.
+- /change less visual noise:
+  set density to very_sparse or sparse.
+- /change more yellow:
+  bias accent/text toward muted amber/gold.
+- /change less cyan:
+  reduce cyan to secondary detail only.
+- /change use more local photos:
+  set Display 4 and 3 to hybrid/local_photo unless body load suggests otherwise.
+- /change no photos today or generated only:
+  set Displays 4/2/3 to generated.
+- /change darker:
+  lower background/surface brightness.
+- /change brighter:
+  brighten surface slightly but keep dark-mode terminal/product aesthetic.
+- /change more contrast:
+  increase accent contrast.
+- /change less contrast:
+  soften accents.
+
+Regenerate behavior:
+- /regenerate should create a valid alternate theme plan using the same signals and startup mode.
+- It should avoid returning the exact same family if reasonable.
+- It should preserve safety constraints.
+- It should increment regenerate_count in the session.
+
+Integration with StartupSequence:
+After user enters raw check-in:
+1. LocalCheckInInterpreter runs.
+2. Terminal prints practical interpretation summary.
+3. ThemeGenerator creates ThemePlan.
+4. Terminal prints THEME PLAN block.
+5. Move to THEME_APPROVAL.
+6. /theme prints current theme plan.
+7. /change updates the current plan and records the change.
+8. /regenerate regenerates the plan and records regenerate count.
+9. /approve proceeds to MINDFULNESS.
+
+The rest of the ritual remains mostly as Phase 3 placeholder:
+- Mindfulness can remain placeholder.
+- Verse can remain placeholder.
+- Innovation exercise can remain placeholder.
+- Poster plan can remain placeholder except it may reference the selected theme family/style.
+- No image files are generated.
+
+Testing:
+Add/update tests without launching GUI.
+
+Interpreter tests:
+1. tired/foggy/scattered input -> low energy, foggy/scattered clarity, Structured Start.
+2. wired/restless input -> high energy, Momentum Start.
+3. low/heavy input -> heavy mood, Gentle Start.
+4. ticket queue/on fire input -> Triage Start unless high pressure forces Structured/Calm.
+5. headache/sensory input -> body_context includes headache/sensory_load and low intensity later.
+6. "I feel anxious" -> high pressure, no clinical term in summary.
+7. "I feel depressed" -> heavy mood, no clinical term in summary.
+8. "ADHD brain is loud today" -> scattered or starting/prioritizing friction, no clinical term in summary.
+9. empty input -> unknown/default signals and Structured Start.
+10. forbidden clinical labels are not present in generated summaries.
+
+Theme tests:
+1. Calm Start -> Synth Sanctuary or Arctic Interface, low intensity.
+2. Structured Start -> Obsidian Terminal or Chrome Monolith.
+3. Gentle Start -> Synth Sanctuary or Synthetic Sunrise.
+4. Momentum Start -> Neon Noir or Violet Circuit unless constraints apply.
+5. Triage with high pressure does not use Redline Protocol.
+6. headache/sensory lowers intensity/density.
+7. Display 1 is always public innovation poster.
+8. Display 2 is generated minimal by default.
+9. /change more cyberpunk increases intensity within constraints.
+10. /change calmer lowers intensity/density.
+11. /change use more local photos affects Displays 4 and 3 only.
+12. /change no photos today makes Displays 4/2/3 generated.
+13. /regenerate returns a valid plan.
+14. theme description contains monitor roles and does not contain private check-in.
+
+StartupSequence tests:
+1. Check-in captures raw text privately.
+2. After check-in, sequence reaches THEME_APPROVAL with real signals and theme plan.
+3. /theme prints current real theme description.
+4. /change records request and updates theme plan.
+5. /regenerate increments regenerate_count.
+6. Full happy path still reaches COMPLETE.
+7. Public poster plan still does not include raw check-in.
+
+README update:
+Update README with:
+- Phase 4 status
+- Local interpretation behavior
+- Practical signals list
+- Startup modes
+- Theme families
+- Change commands supported during theme approval
+- Current limitations:
+  - no OpenAI yet
+  - no images generated yet
+  - no Lightroom indexing yet
+  - no wallpaper application yet
+  - no real poster rendering yet
+
+Important restrictions:
+- Do not call OpenAI.
+- Do not generate images.
+- Do not apply wallpapers.
+- Do not index local photos.
+- Do not add formal ADHD/depression/anxiety questionnaires.
+- Do not diagnose the user.
+- Do not use clinical labels in output.
+- Do not modify Windows registry.
+- Do not modify taskbar pins or icons.
+- Do not require admin rights.
+
+Done criteria:
+1. `python -m chaseos` launches the app.
+2. User can run /start and enter a check-in.
+3. ChaseOS produces real practical signals.
+4. ChaseOS chooses a real startup mode.
+5. ChaseOS prints a real theme plan.
+6. /change updates the theme plan.
+7. /regenerate returns an alternate safe theme plan.
+8. /approve continues the ritual.
+9. Full ritual still completes.
+10. Public poster plan remains separated from raw check-in.
+11. Unit tests pass.
+12. Full pytest suite passes.
+13. Ruff check passes.
+14. README is updated.

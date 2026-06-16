@@ -1,0 +1,177 @@
+Phase 2: Build the terminal-style tray shell for ChaseOS.
+
+Context:
+Phase 1 created the ChaseOS scaffold at:
+
+C:\_Codex\chaseos
+
+The project uses a src-layout package and should run with:
+
+python -m chaseos
+
+Respect all rules in AGENTS.md.
+
+Goal:
+Build the first real ChaseOS shell: a Windows tray app that opens a small terminal-style dark command window. This phase is only the app shell and command input loop. Do not implement the full ritual state machine yet. Do not generate wallpapers yet. Do not apply wallpapers yet.
+
+Product direction:
+ChaseOS should feel like a quiet command console, not a dashboard.
+
+UI requirements:
+1. Use PySide6.
+2. Add a system tray icon using QSystemTrayIcon.
+3. Left-clicking or activating the tray icon should show/hide the main terminal window.
+4. Right-click tray menu should include:
+   - Start 15-Minute Sequence
+   - Quick Theme Shift
+   - Today’s Public Poster
+   - Regenerate Wallpapers
+   - Open Poster Archive
+   - Settings
+   - Reset Desktop
+   - Exit
+
+5. Main terminal window:
+   - Default size: 720x520
+   - Minimum size: 560x380
+   - Resizable
+   - Dark gray background
+   - Muted darker yellow/amber monospaced text
+   - Use Cascadia Mono if available, otherwise Consolas or another monospace font
+   - Header line showing:
+     CHASEOS :: START SEQUENCE
+     status/timer placeholder
+   - Scrollable terminal output area
+   - Single command input line at bottom
+
+6. Visual style:
+   - No dashboard cards
+   - No visual theme preview
+   - No bright neon UI
+   - No large panels
+   - Text-first
+   - Calm dark console aesthetic
+
+7. Initial terminal output:
+   When the window opens, show:
+
+   chaseos> ready.
+   chaseos> type /start to begin.
+   chaseos> type /help for commands.
+
+8. Input behavior:
+   - Enter submits current input.
+   - Escape minimizes/hides the window to tray.
+   - Ctrl+L clears visible terminal output.
+   - Submitted input should appear as:
+     user> <input>
+   - ChaseOS responses should appear as:
+     chaseos> <response>
+   - System/internal messages should appear as:
+     system> <message>
+
+Command handling:
+Implement command parsing in:
+
+src/chaseos/app/command_router.py
+
+Support these commands in Phase 2:
+
+- /help
+- /start
+- /clear
+- /exit
+- /reset
+- /theme
+- /poster
+- /approve
+- /regenerate
+- /change <free text>
+- /skip
+- /status
+- /monitors
+
+Expected behavior for now:
+- /help prints available commands.
+- /start prints:
+  chaseos> start sequence shell ready. ritual engine comes in phase 3.
+- /clear clears visible terminal output.
+- /exit exits the app cleanly.
+- /reset prints a placeholder reset message.
+- /theme prints a placeholder theme-plan message.
+- /poster prints a placeholder public-poster message.
+- /approve prints a placeholder approval message.
+- /regenerate prints a placeholder regeneration message.
+- /change <free text> echoes the requested change in a clean parsed form.
+- /skip prints a placeholder skip message.
+- /status prints current shell status.
+- /monitors prints placeholder monitor roles:
+  display 1 -> Public Signal Monitor
+  display 4 -> Left Atmosphere Monitor
+  display 2 -> Center Command Monitor
+  display 3 -> Right Inspiration Monitor
+
+Architecture requirements:
+1. Keep GUI code separate from command parsing.
+2. The command router should be testable without starting PySide6.
+3. Use simple dataclasses or Pydantic models if helpful.
+4. Keep terminal output formatting in one place where possible.
+5. Avoid hardcoded Windows-only behavior except tray/window integration.
+6. If tray icon image assets do not exist, create a simple fallback icon programmatically or use a safe default.
+
+Files likely involved:
+- src/chaseos/__main__.py
+- src/chaseos/app/tray_app.py
+- src/chaseos/app/terminal_window.py
+- src/chaseos/app/command_router.py
+- src/chaseos/app/app_state.py
+- tests/unit/test_command_router.py
+
+Testing:
+Add or update tests for command parsing:
+1. /help is recognized.
+2. /start is recognized.
+3. /change calmer captures "calmer".
+4. /change more cyberpunk captures "more cyberpunk".
+5. Unknown commands return a friendly unknown-command result.
+6. Empty input is ignored or returns no-op.
+7. /monitors returns placeholder monitor role text.
+8. /clear is recognized.
+9. /exit is recognized.
+
+Do not require GUI tests to run in CI/local pytest.
+Unit tests should not instantiate QApplication unless absolutely necessary.
+
+README update:
+Update README with:
+- How to run the tray app:
+  python -m chaseos
+- How to run tests:
+  pytest
+- Current Phase 2 scope
+- Current limitations:
+  - ritual engine not implemented yet
+  - wallpapers not generated yet
+  - wallpapers not applied yet
+  - OpenAI not integrated yet
+
+Important restrictions:
+- Do not implement OpenAI calls.
+- Do not apply wallpapers.
+- Do not generate real posters.
+- Do not index the Lightroom photo folder yet.
+- Do not implement clinical questionnaires.
+- Do not diagnose the user.
+- Do not modify registry settings.
+- Do not modify taskbar pins or icons.
+- Do not require admin rights.
+
+Done criteria:
+1. Running `python -m chaseos` launches the PySide6 app.
+2. Tray icon appears.
+3. Terminal window can be shown/hidden.
+4. Terminal window uses dark gray background and muted amber monospaced text.
+5. User can type commands and see formatted responses.
+6. Command router tests pass.
+7. Full pytest suite passes.
+8. README is updated.

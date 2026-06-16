@@ -1,0 +1,405 @@
+Phase 8: Add Windows monitor detection and ChaseOS role mapping.
+
+Context:
+Phase 1 created the ChaseOS scaffold.
+Phase 2 created the PySide6 tray shell and terminal window.
+Phase 3 added the text-only 15-minute ritual state machine.
+Phase 4 added local deterministic check-in interpretation and real theme planning.
+Phase 5 added the Display 1 Daily Public Innovation Poster engine.
+Phase 6 added generated private wallpapers for Displays 4, 2, and 3.
+Phase 7 added Lightroom photo indexing/selection and hybrid private wallpapers.
+
+Project location:
+C:\_Codex\chaseos
+
+Run command:
+python -m chaseos
+
+Respect all rules in AGENTS.md.
+
+Goal:
+Add real Windows monitor detection and ChaseOS monitor role mapping.
+
+This phase should detect connected monitors, display their geometry/orientation, allow the user to assign ChaseOS roles, and persist those role mappings.
+
+Do not apply wallpapers to Windows yet.
+Wallpaper application comes in Phase 9.
+
+Known user monitor layout:
+- Display 1: portrait public-facing monitor, used for Daily Public Innovation Poster, 1080x1920
+- Display 4: landscape private monitor, Left Atmosphere
+- Display 2: landscape private monitor, Center Command
+- Display 3: landscape private monitor, Right Inspiration
+
+Known layout shape:
+[ Display 1 portrait ] [ Display 4 landscape ] [ Display 2 landscape ] [ Display 3 landscape ]
+
+ChaseOS roles:
+1. Public Signal Monitor
+   - intended display: 1
+   - portrait
+   - uses Display 1 public poster
+   - should never use general Lightroom photos by default
+
+2. Left Atmosphere Monitor
+   - intended display: 4
+   - landscape
+   - private atmosphere/hybrid wallpaper
+
+3. Center Command Monitor
+   - intended display: 2
+   - landscape
+   - private generated minimal wallpaper
+   - lowest visual noise
+
+4. Right Inspiration Monitor
+   - intended display: 3
+   - landscape
+   - private inspiration/hybrid wallpaper
+
+Do not implement:
+- OpenAI calls
+- AI image generation
+- Windows wallpaper application
+- registry changes
+- taskbar icon changes
+- clinical questionnaires
+- diagnosis language
+
+Important:
+This phase should only detect monitors and map roles.
+Generated images already exist from previous phases.
+Do not set wallpapers yet.
+
+Architecture:
+Use or update these modules:
+
+src/chaseos/models/monitor.py
+- Define monitor models:
+  DetectedMonitor
+  MonitorRole
+  MonitorRoleAssignment
+  MonitorLayout
+  MonitorMappingConfig
+
+DetectedMonitor fields:
+- stable_id: str
+- display_label: str | None
+- device_name: str | None
+- device_path: str | None
+- x: int
+- y: int
+- width: int
+- height: int
+- orientation: portrait | landscape | square
+- is_primary: bool | None
+- raw: dict optional
+
+MonitorRole enum/constant values:
+- public_signal
+- left_atmosphere
+- center_command
+- right_inspiration
+- unassigned
+
+MonitorRoleAssignment fields:
+- role
+- stable_id
+- display_label optional
+- expected_orientation
+- assigned_at
+- confidence optional
+- notes list[str]
+
+MonitorLayout fields:
+- detected_at
+- monitors: list[DetectedMonitor]
+- assignments: dict role -> MonitorRoleAssignment
+
+src/chaseos/windows/display_detection.py
+- Implement Windows monitor detection.
+- Prefer a Windows-compatible method available without admin rights.
+- Use stable identifiers where possible.
+- Capture monitor rectangles and orientation.
+- If true Windows display numbers are hard to obtain reliably, provide best available display labels and geometry.
+- The code must fail gracefully on non-Windows or unsupported environments.
+
+Possible implementation options:
+- Use ctypes with EnumDisplayMonitors/GetMonitorInfo.
+- Use pywin32 if already available or add it only if needed.
+- Avoid requiring admin rights.
+- Avoid changing system settings.
+
+src/chaseos/windows/display_detection.py should expose:
+- detect_monitors() -> list[DetectedMonitor]
+- detect_monitor_layout() -> MonitorLayout or equivalent
+- get_fallback_monitor_layout() -> MonitorLayout
+
+Fallback behavior:
+If detection fails, return a fallback layout matching the known setup:
+- display 1: 1080x1920 portrait, role public_signal
+- display 4: 1920x1080 landscape, role left_atmosphere
+- display 2: 1920x1080 landscape, role center_command
+- display 3: 1920x1080 landscape, role right_inspiration
+
+The fallback should be clearly marked:
+system> using fallback monitor layout. real detection unavailable.
+
+src/chaseos/storage/settings_store.py
+- Persist monitor role mappings locally under:
+  %LOCALAPPDATA%\ChaseOS\config\monitor_mapping.json
+- Add load/save helpers.
+
+src/chaseos/windows/display_detection.py or a new file:
+src/chaseos/windows/monitor_roles.py
+- Add role assignment logic:
+  - assign_monitor_role(layout, display_or_stable_id, role)
+  - auto_assign_known_layout(layout)
+  - validate_assignments(layout)
+  - summarize_monitor_layout(layout)
+
+Auto-assignment:
+When monitors are detected, attempt to auto-assign roles:
+1. If a portrait monitor near the left side exists, assign it to public_signal.
+2. For landscape monitors to the right:
+   - leftmost landscape -> left_atmosphere
+   - middle landscape -> center_command
+   - rightmost landscape -> right_inspiration
+3. If display labels 1, 4, 2, 3 are available:
+   - display 1 -> public_signal
+   - display 4 -> left_atmosphere
+   - display 2 -> center_command
+   - display 3 -> right_inspiration
+4. If saved mappings exist and stable IDs still match, use saved mappings first.
+5. If saved mappings are stale, warn and suggest reassignment.
+
+Terminal commands:
+Add or update command parsing and ritual/app handling for:
+
+/monitors
+- Detect monitors.
+- Print detected monitor layout and current ChaseOS roles.
+
+Example output:
+MONITORS
+display 1 .... 1080x1920 portrait .... Public Signal Monitor
+display 4 .... 1920x1080 landscape ... Left Atmosphere
+display 2 .... 1920x1080 landscape ... Center Command
+display 3 .... 1920x1080 landscape ... Right Inspiration
+
+/monitor roles
+- Print current saved role mapping.
+
+/detect monitors
+- Force fresh monitor detection and print results.
+
+/assign display 1 public
+/assign display 4 left
+/assign display 2 center
+/assign display 3 right
+
+Also support:
+/assign 1 public
+/assign 4 left
+/assign 2 center
+/assign 3 right
+
+Role aliases:
+public:
+- public
+- public_signal
+- signal
+- poster
+- display1
+
+left:
+- left
+- left_atmosphere
+- atmosphere
+- display4
+
+center:
+- center
+- center_command
+- command
+- main
+- display2
+
+right:
+- right
+- right_inspiration
+- inspiration
+- display3
+
+/auto assign monitors
+- Run auto-assignment and save mapping.
+
+/save monitors
+- Save current mapping.
+
+/reset monitors
+- Clear saved mapping and return to fallback/auto-detect behavior.
+
+Command output requirements:
+- Do not crash if monitor detection fails.
+- Print useful fallback message.
+- Keep output terminal-friendly.
+- Do not expose unnecessary raw device strings unless useful.
+- Device paths can be stored in config, but normal terminal output should be concise.
+
+Example terminal output:
+/monitors
+
+MONITORS
+detected ........ yes
+source .......... windows
+saved mapping ... yes
+
+display 1 .... 1080x1920 portrait .... public signal
+display 4 .... 1920x1080 landscape ... left atmosphere
+display 2 .... 1920x1080 landscape ... center command
+display 3 .... 1920x1080 landscape ... right inspiration
+
+chaseos> wallpaper application is not enabled in phase 8.
+
+If fallback:
+MONITORS
+detected ........ no
+source .......... fallback
+
+display 1 .... 1080x1920 portrait .... public signal
+display 4 .... 1920x1080 landscape ... left atmosphere
+display 2 .... 1920x1080 landscape ... center command
+display 3 .... 1920x1080 landscape ... right inspiration
+
+system> real monitor detection unavailable. using known ChaseOS fallback layout.
+
+Integration with wallpaper manifest:
+Do not apply wallpapers yet.
+But update generated wallpaper manifest or add a monitor_mapping reference if straightforward:
+- monitor_mapping_source: detected | saved | fallback
+- role_mapping:
+  public_signal -> display/stable_id
+  left_atmosphere -> display/stable_id
+  center_command -> display/stable_id
+  right_inspiration -> display/stable_id
+
+Do not break existing manifest tests.
+
+Status command:
+Update /status to include:
+- monitor mapping exists yes/no
+- monitor mapping source detected/saved/fallback/unknown
+- public signal role assigned yes/no
+- private roles assigned yes/no
+
+Settings/storage:
+Save monitor mapping to:
+%LOCALAPPDATA%\ChaseOS\config\monitor_mapping.json
+
+If tests need isolation, allow base data dir override with temp path.
+
+Testing:
+Add/update tests without requiring real Windows monitors.
+
+Model tests:
+1. DetectedMonitor orientation is calculated correctly.
+2. MonitorRole aliases resolve correctly.
+3. MonitorRoleAssignment serializes/deserializes.
+4. MonitorLayout serializes/deserializes.
+
+Fallback tests:
+1. Fallback layout contains four monitors.
+2. Display 1 fallback is portrait 1080x1920.
+3. Displays 4, 2, and 3 fallback are landscape 1920x1080.
+4. Fallback roles match ChaseOS known layout.
+
+Assignment tests:
+1. /assign display 1 public maps to public_signal.
+2. /assign 4 left maps to left_atmosphere.
+3. /assign 2 center maps to center_command.
+4. /assign 3 right maps to right_inspiration.
+5. Invalid role returns friendly error.
+6. Invalid display returns friendly error.
+7. Assignment save/load works.
+8. Reset clears saved mapping.
+
+Auto-assignment tests:
+1. Portrait-left monitor becomes public_signal.
+2. Landscape monitors are assigned left/center/right by x coordinate.
+3. If display labels 1/4/2/3 are present, they map correctly.
+4. Saved stable IDs are preferred when still present.
+5. Stale saved IDs are detected and warned.
+
+Command tests:
+1. /monitors returns monitor layout text.
+2. /detect monitors is recognized.
+3. /monitor roles is recognized.
+4. /auto assign monitors is recognized.
+5. /save monitors is recognized.
+6. /reset monitors is recognized.
+7. /status includes monitor mapping status.
+
+Startup/app tests:
+1. Existing ritual happy path still reaches COMPLETE.
+2. /wallpapers still works.
+3. /photos still works.
+4. Monitor commands do not require an active ritual.
+5. Monitor detection failure does not crash the app.
+
+README update:
+Update README with:
+- Phase 8 status
+- Monitor detection behavior
+- Known monitor role mapping:
+  - Display 1 public signal
+  - Display 4 left atmosphere
+  - Display 2 center command
+  - Display 3 right inspiration
+- Commands:
+  - /monitors
+  - /detect monitors
+  - /monitor roles
+  - /assign display 1 public
+  - /assign display 4 left
+  - /assign display 2 center
+  - /assign display 3 right
+  - /auto assign monitors
+  - /save monitors
+  - /reset monitors
+- Config path:
+  %LOCALAPPDATA%\ChaseOS\config\monitor_mapping.json
+- Current limitations:
+  - no wallpaper application yet
+  - no OpenAI yet
+  - monitor labels may vary depending on Windows/GPU/dock behavior
+  - fallback layout is used if detection fails
+
+Important restrictions:
+- Do not call OpenAI.
+- Do not use external services.
+- Do not apply wallpapers to Windows.
+- Do not modify registry settings.
+- Do not modify taskbar pins or icons.
+- Do not use general photos on Display 1.
+- Do not add clinical questionnaires.
+- Do not diagnose the user.
+- Do not use clinical labels in output.
+- Do not require admin rights.
+
+Done criteria:
+1. `python -m chaseos` launches the app.
+2. /monitors prints detected or fallback monitor layout.
+3. /detect monitors forces detection.
+4. /assign commands can map Display 1/4/2/3 to ChaseOS roles.
+5. /auto assign monitors maps the known layout correctly when possible.
+6. Monitor mapping saves to local config.
+7. Saved mapping loads on next app run.
+8. /status includes monitor mapping state.
+9. Existing ritual still completes.
+10. Existing poster/wallpaper/photo commands still work.
+11. No wallpapers are applied to Windows in this phase.
+12. Unit tests pass.
+13. Full pytest suite passes.
+14. Ruff check passes.
+15. README is updated.

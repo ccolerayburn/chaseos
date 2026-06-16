@@ -1,0 +1,448 @@
+Phase 5: Implement the Daily Public Innovation Poster engine.
+
+Context:
+Phase 1 created the ChaseOS scaffold.
+Phase 2 created the PySide6 tray shell and terminal window.
+Phase 3 added the text-only 15-minute ritual state machine.
+Phase 4 added local check-in interpretation and real theme planning.
+
+Project location:
+C:\_Codex\chaseos
+
+Run command:
+python -m chaseos
+
+Respect all rules in AGENTS.md.
+
+Goal:
+Replace the placeholder public poster plan with a real local poster engine.
+
+ChaseOS should generate a public-safe 1080x1920 portrait PNG for Display 1 based only on the innovation exercise takeaway.
+
+This poster is intended to be visible to anyone visiting the user's cube.
+
+The poster should:
+- be exactly 1080x1920
+- be portrait
+- be sleek
+- be minimal
+- be futuristic
+- be cyberpunk-inspired
+- have high readability from several feet away
+- include an original short quote
+- include an optional small subtitle
+- never include private check-in details
+- never include sensitive workplace/private data
+
+Do not implement:
+- OpenAI calls
+- AI image generation
+- private wallpaper generation for Displays 4/2/3
+- Lightroom indexing
+- Windows wallpaper application
+- registry changes
+- taskbar icon changes
+- clinical questionnaires
+- diagnosis language
+
+Important privacy/product rule:
+The public poster must be based only on the innovation takeaway.
+
+The raw check-in text must never be used in:
+- public poster quote
+- public poster subtitle
+- public poster metadata intended for public display
+- rendered image text
+- public-safe takeaway
+- public poster prompt/plan
+
+The private innovation takeaway can be stored in metadata locally, but the rendered poster image must contain only public-safe content.
+
+Existing flow:
+The ritual currently reaches:
+- INNOVATION
+- INNOVATION_TAKEAWAY
+- POSTER_PLAN
+- POSTER_APPROVAL
+
+In Phase 5:
+1. When user enters the innovation takeaway, run the public poster engine.
+2. Create a public-safe takeaway.
+3. Generate an original short quote.
+4. Generate a text-described poster plan.
+5. Ask for approval/change/regenerate.
+6. On approval, render the final 1080x1920 PNG.
+7. Store poster metadata locally.
+8. Continue the ritual.
+
+Architecture:
+Use or update these modules:
+
+src/chaseos/models/poster.py
+- Define poster models:
+  PublicPosterPlan
+  PublicPosterMetadata
+  PublicPosterStyle
+  PublicPosterRenderResult
+
+src/chaseos/poster/poster_safety.py
+- Implement public content safety/redaction.
+- Convert private innovation takeaway into public-safe principle.
+- Ensure public text does not contain sensitive/private content.
+- Ensure raw check-in text cannot appear in public poster plan.
+
+src/chaseos/poster/quote_engine.py
+- Generate original short quotes from public-safe principles.
+- Deterministic local rules for now.
+- No famous quotes.
+- No copyrighted quote database.
+- No OpenAI.
+- No external calls.
+
+src/chaseos/poster/poster_renderer.py
+- Use Pillow to generate exact 1080x1920 PNG.
+- Render quote text locally.
+- Render subtitle locally.
+- Use theme colors from ThemePlan.
+- Generate sleek minimal futuristic/cyberpunk background locally:
+  - dark gradient
+  - subtle geometric lines
+  - circuit/grid accents
+  - optional glow-like shapes
+  - safe margins
+  - large readable text
+
+src/chaseos/poster/public_poster_engine.py
+- Coordinate safety, quote generation, plan generation, and rendering.
+- Accept:
+  - innovation_exercise
+  - private_innovation_takeaway
+  - theme_plan
+  - date
+  - output directory
+  - optional change_requests
+  - optional regenerate_count
+  - raw_check_in only for safety validation, never for content generation
+- Return:
+  - PublicPosterPlan
+  - PublicPosterRenderResult after rendering
+
+src/chaseos/poster/poster_archive.py
+- Save poster metadata.
+- Use dated archive folders.
+- Implement once-per-day behavior if straightforward.
+- Do not block the core flow if archive already exists.
+
+src/chaseos/storage/paths.py
+- Add runtime paths under:
+  %LOCALAPPDATA%\ChaseOS
+- Add helpers:
+  get_chaseos_data_dir()
+  get_generated_dir(date)
+  get_posters_dir(date)
+  get_sessions_dir()
+  get_logs_dir()
+- During tests, allow overriding base path with temp directory.
+
+src/chaseos/ritual/startup_sequence.py
+- Replace placeholder poster plan with real PublicPosterEngine.
+- Store poster plan and render result in session.
+- On /poster, print current real poster plan.
+- On /change during POSTER_APPROVAL, revise quote/style with the requested change.
+- On /regenerate during POSTER_APPROVAL, generate an alternate quote/style.
+- On /approve during POSTER_APPROVAL, render poster PNG and proceed to WORK_RAMP.
+- The applying stage may still only print placeholder wallpaper application.
+
+Poster safety requirements:
+Redact or generalize these from private innovation takeaway:
+- ticket numbers:
+  INC123456
+  INC0012345
+  REQ123456
+  CHG123456
+  TASK123456
+  any obvious ticket-like ID
+- emails
+- usernames
+- Windows-style usernames
+- internal URLs
+- external URLs when specific/private
+- IP addresses
+- hostnames
+- server names
+- machine names
+- file paths
+- credentials/secrets/API keys/tokens
+- customer names
+- company names from configurable denylist
+- internal system names from configurable denylist
+- queue names if specific/internal
+- medical/private mood/health details
+
+For now, add default denylist examples in settings or safety module:
+- xray
+- chase
+- chaseos
+- vpn
+- active directory
+- entra
+- servicenow
+- jira
+- teams
+- outlook
+- hostname
+- domain
+These should be treated carefully:
+- Do not blindly destroy generic words if it makes the public takeaway useless.
+- Prefer generalizing to public-safe language:
+  "the ticketing system" -> "the workflow"
+  "VPN tickets" -> "repeat access issues"
+  "hostname and username" -> "the right details"
+  "INC123456" -> "[ticket]"
+  "server abc01" -> "the system"
+
+Public-safe principle examples:
+Private:
+"We keep asking the same first troubleshooting questions manually."
+Public-safe principle:
+"Repeated questions should become reusable structure."
+
+Private:
+"VPN tickets keep missing hostname, username, and the exact error."
+Public-safe principle:
+"Better inputs make faster fixes."
+
+Private:
+"INC0049217 showed our escalation handoff is messy."
+Public-safe principle:
+"Clear handoffs reduce repeated work."
+
+Quote generation:
+Generate original quotes, 5 to 12 words preferred.
+
+Examples:
+- "Make the repeated thing easier."
+- "Clarity shortens the path."
+- "Turn friction into a system."
+- "Better inputs make quieter fires."
+- "Small fixes compound into calmer systems."
+- "Build the path before the rush."
+- "Reusable structure beats repeated effort."
+- "A clearer handoff is a quieter day."
+- "Find the pattern. Build the shortcut."
+- "Service improves where friction becomes visible."
+
+Bad quote examples:
+- Famous quotes.
+- Long paragraphs.
+- Anything mentioning the user's mood, sleep, food, symptoms, or private check-in.
+- Anything mentioning ticket IDs, systems, usernames, hostnames, URLs, or company/internal details.
+
+Poster styles:
+Implement these local style families:
+- Obsidian Signal
+- Neon Blueprint
+- Chrome Monolith
+- Violet Circuit
+- Redline Protocol
+- Arctic Interface
+- Synthetic Sunrise
+
+Style mapping:
+- Obsidian Terminal theme -> Obsidian Signal or Neon Blueprint
+- Chrome Monolith theme -> Chrome Monolith
+- Violet Circuit theme -> Violet Circuit
+- Redline Protocol theme -> Redline Protocol, but keep professional and not alarming
+- Arctic Interface theme -> Arctic Interface
+- Synth Sanctuary theme -> Synthetic Sunrise or Obsidian Signal
+- Synthetic Sunrise theme -> Synthetic Sunrise
+
+Poster plan text:
+Render a terminal-friendly block like:
+
+PUBLIC POSTER PLAN
+display ......... 1
+size ............ 1080x1920
+style ........... Obsidian Signal
+quote ........... "Make the repeated thing easier."
+subtitle ........ Daily Innovation Signal
+source .......... innovation takeaway only
+safe ............ yes
+
+Ask:
+chaseos> approve poster, change quote, or regenerate?
+chaseos> commands: /approve, /change <request>, /regenerate, /poster, /skip
+
+Poster approval behavior:
+- /approve renders the poster PNG and moves to WORK_RAMP.
+- /skip renders the current poster PNG and moves to WORK_RAMP.
+- /poster prints current poster plan.
+- /regenerate creates another safe quote/style and increments poster_regenerate_count.
+- /change quote shorter:
+  shorten quote if possible.
+- /change less cheesy:
+  choose more direct systems/process language.
+- /change more inspirational:
+  choose more uplifting but still professional language.
+- /change more minimal:
+  reduce visual density and text.
+- /change more cyberpunk:
+  increase geometric/cyber visual accents, but keep readability.
+- /change no subtitle:
+  remove subtitle.
+- /change <other free text>:
+  record request and apply best-effort local adjustment.
+
+Rendering requirements:
+- Image size exactly 1080x1920.
+- Background dark by default.
+- Quote should be large, centered or slightly above center.
+- Use safe margins of at least 100 px.
+- Use high contrast text.
+- Use theme text/accent colors if available.
+- Use a monospaced or clean built-in font.
+- Do not include the raw check-in.
+- Do not include the private innovation takeaway directly unless it has been made public-safe.
+- Do not include random extra generated words.
+- Do not rely on AI rendering text.
+- Use Pillow text rendering only.
+
+Font behavior:
+- Use common Windows fonts if available:
+  Cascadia Mono
+  Consolas
+  Segoe UI
+  Arial
+- If font lookup fails, use Pillow default font.
+- Do not include or distribute font files.
+
+Metadata:
+Save metadata JSON next to the image:
+public_poster_meta.json
+
+Fields:
+- date
+- generated_at
+- innovation_exercise
+- private_takeaway
+- public_safe_takeaway
+- quote
+- subtitle
+- style_family
+- image_path
+- width
+- height
+- approved
+- change_requests
+- regenerate_count
+- source_policy: "innovation_takeaway_only"
+- raw_check_in_used_for_content: false
+
+Output path:
+Use:
+%LOCALAPPDATA%\ChaseOS\posters\YYYY-MM-DD\display_1_public_signal.png
+
+In tests, allow temp output directory.
+
+Once-per-day behavior:
+Implement minimal once-per-day behavior:
+- If today's poster exists and force_regenerate is false, the engine can load/reuse metadata.
+- During the ritual, if user regenerates, force regeneration is allowed.
+- Do not make once-per-day behavior so strict that testing becomes painful.
+
+Session:
+Update in-memory ritual session to store:
+- innovation_exercise
+- innovation_takeaway
+- public_safe_takeaway
+- public_quote
+- poster_plan
+- poster_render_result
+- poster_change_requests
+- poster_regenerate_count
+- poster_approved
+
+The full session JSON persistence can wait for a later phase unless it is easy.
+
+Testing:
+Add/update tests without launching GUI.
+
+Poster safety tests:
+1. Raw check-in text is not used in public poster plan.
+2. Emails are redacted/generalized.
+3. URLs are redacted/generalized.
+4. IP addresses are redacted/generalized.
+5. Ticket IDs are redacted/generalized.
+6. Hostnames/server names are redacted/generalized.
+7. File paths are redacted/generalized.
+8. Obvious secrets/tokens are redacted.
+9. Medical/private mood details are not included in public-safe takeaway.
+10. Public-safe principle is non-empty.
+
+Quote tests:
+1. Quote is non-empty.
+2. Quote is reasonably short.
+3. Quote does not include sensitive strings from private takeaway.
+4. "less cheesy" request returns a more direct quote if possible.
+5. "quote shorter" request shortens or keeps a short quote.
+
+Renderer tests:
+1. Poster PNG is created.
+2. Poster PNG is exactly 1080x1920.
+3. Metadata JSON is created.
+4. Metadata width/height match.
+5. Rendered output does not require external fonts.
+6. Rendering works with temp directory.
+
+StartupSequence tests:
+1. After innovation takeaway, sequence reaches POSTER_APPROVAL with a real poster plan.
+2. /poster prints real current poster plan.
+3. /change quote shorter records change and updates quote or plan.
+4. /regenerate increments poster_regenerate_count.
+5. /approve renders a poster and moves to WORK_RAMP.
+6. Full happy path reaches COMPLETE and poster file exists.
+7. Public poster plan and metadata do not contain raw check-in.
+8. Public poster rendered text does not contain raw check-in.
+9. Poster uses Display 1 and 1080x1920.
+
+README update:
+Update README with:
+- Phase 5 status
+- Daily Public Innovation Poster behavior
+- Display 1 role
+- Poster safety rules
+- Output path
+- Poster approval commands
+- Current limitations:
+  - no OpenAI yet
+  - no private wallpaper generation yet
+  - no Lightroom indexing yet
+  - no Windows wallpaper application yet
+
+Important restrictions:
+- Do not call OpenAI.
+- Do not use external services.
+- Do not generate images with AI.
+- Do not index Lightroom photos yet.
+- Do not generate private monitor wallpapers yet unless trivial placeholders already exist.
+- Do not apply wallpapers.
+- Do not modify registry settings.
+- Do not modify taskbar pins or icons.
+- Do not add clinical questionnaires.
+- Do not diagnose the user.
+- Do not use clinical labels in output.
+- Do not require admin rights.
+
+Done criteria:
+1. `python -m chaseos` launches the app.
+2. User can run the ritual through innovation takeaway.
+3. ChaseOS creates a real public poster plan from the innovation takeaway only.
+4. User can approve/change/regenerate the poster plan.
+5. On approval, ChaseOS renders a real 1080x1920 PNG for Display 1.
+6. Poster metadata JSON is saved.
+7. Raw check-in text is not included in public poster plan, quote, rendered poster metadata public fields, or image text.
+8. Full ritual still completes.
+9. Unit tests pass.
+10. Full pytest suite passes.
+11. Ruff check passes.
+12. README is updated.

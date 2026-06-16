@@ -1,0 +1,2 @@
+"""Startup ritual orchestration."""
+

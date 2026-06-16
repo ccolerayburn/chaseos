@@ -1,0 +1,387 @@
+Phase 6: Generate private monitor wallpapers for Displays 4, 2, and 3.
+
+Context:
+Phase 1 created the ChaseOS scaffold.
+Phase 2 created the PySide6 tray shell and terminal window.
+Phase 3 added the text-only 15-minute ritual state machine.
+Phase 4 added local deterministic check-in interpretation and real theme planning.
+Phase 5 added the Display 1 Daily Public Innovation Poster engine.
+
+Project location:
+C:\_Codex\chaseos
+
+Run command:
+python -m chaseos
+
+Respect all rules in AGENTS.md.
+
+Goal:
+Generate real local private wallpapers for the three private workstation monitors:
+
+- Display 4: Left Atmosphere Monitor
+- Display 2: Center Command Monitor
+- Display 3: Right Inspiration Monitor
+
+These wallpapers should be generated locally with Pillow based on the current ThemePlan and startup mode.
+
+Do not implement:
+- OpenAI calls
+- AI image generation
+- Lightroom indexing
+- local photo selection
+- Windows wallpaper application
+- monitor detection
+- registry changes
+- taskbar icon changes
+- clinical questionnaires
+- diagnosis language
+
+Important:
+Display 1 public poster already exists from Phase 5.
+Phase 6 should not break or rewrite the public poster engine.
+Phase 6 should add the three private monitor wallpapers and produce a complete four-surface asset set for the day.
+
+Known monitor roles:
+- Display 1: Public Signal Monitor, portrait, 1080x1920 public innovation poster
+- Display 4: Left Atmosphere Monitor, landscape private wallpaper
+- Display 2: Center Command Monitor, landscape private minimal wallpaper
+- Display 3: Right Inspiration Monitor, landscape private wallpaper
+
+Default output sizes for now:
+- Display 4: 1920x1080
+- Display 2: 1920x1080
+- Display 3: 1920x1080
+
+Later phases can replace these with detected monitor resolutions.
+For now, keep the defaults configurable.
+
+Output files:
+Use:
+%LOCALAPPDATA%\ChaseOS\generated\YYYY-MM-DD\display_4_left_atmosphere.png
+%LOCALAPPDATA%\ChaseOS\generated\YYYY-MM-DD\display_2_center_command.png
+%LOCALAPPDATA%\ChaseOS\generated\YYYY-MM-DD\display_3_right_inspiration.png
+%LOCALAPPDATA%\ChaseOS\generated\YYYY-MM-DD\wallpaper_manifest.json
+
+Architecture:
+Use or update these modules:
+
+src/chaseos/models/assets.py
+- Define GeneratedWallpaper model if needed.
+- Define WallpaperManifest model if needed.
+- Include:
+  - display_id
+  - role
+  - width
+  - height
+  - image_path
+  - generation_mode
+  - theme_family
+  - created_at
+  - public_safe
+  - source
+
+src/chaseos/wallpaper/wallpaper_renderer.py
+- Use Pillow to render one wallpaper image.
+- Support styles:
+  - left_atmosphere
+  - center_command
+  - right_inspiration
+  - generated_minimal
+  - generated_cyberpunk
+  - command_grid
+  - atmosphere_gradient
+  - inspiration_geometry
+
+src/chaseos/wallpaper/wallpaper_composer.py
+- Coordinate generation of Displays 4, 2, and 3.
+- Accept:
+  - ThemePlan
+  - date
+  - output directory
+  - optional target sizes
+- Return:
+  - wallpaper paths
+  - WallpaperManifest
+
+src/chaseos/wallpaper/wallpaper_manifest.py
+- Save and load wallpaper manifest JSON.
+
+src/chaseos/storage/paths.py
+- Add or reuse:
+  get_generated_dir(date)
+
+src/chaseos/ritual/startup_sequence.py
+- During APPLYING stage, after poster approval and work ramp, generate private wallpapers.
+- Do not apply wallpapers to Windows yet.
+- Print terminal output showing generated files.
+- Keep Display 1 poster path from Phase 5 and include it in the final asset summary if available.
+
+Rendering style:
+All wallpapers should be:
+- dark mode
+- sleek
+- minimal
+- futuristic
+- cyberpunk-inspired
+- non-distracting
+- professional
+- free of sensitive text
+- free of raw check-in text
+- free of innovation takeaway text unless explicitly public-safe, and for Phase 6 avoid text entirely on private wallpapers
+
+General wallpaper design:
+Use theme colors from ThemePlan:
+- background
+- surface
+- primary
+- secondary
+- accent
+- text
+
+Use local drawing only:
+- gradients
+- lines
+- geometric shapes
+- subtle grids
+- circuit-like paths
+- glow-like translucent accents
+- low-opacity panels
+- abstract horizon lines
+- command-grid motifs
+
+Do not include readable private text.
+Do not include user check-in text.
+Do not include ticket information.
+Do not include usernames, URLs, hostnames, or internal system names.
+Do not include Bible verse text.
+Do not include the public poster quote.
+
+Display-specific behavior:
+
+Display 4: Left Atmosphere
+Purpose:
+- mood-setting side monitor
+- more atmospheric than the center
+- can be slightly more expressive
+- should still remain calm and work-safe
+
+Style:
+- ambient gradient
+- subtle geometric overlays
+- soft cyberpunk accents
+- low to medium visual density based on ThemePlan
+- no large text
+
+Display 2: Center Command
+Purpose:
+- main work monitor
+- lowest distraction
+- ticket/work readability
+- clean command-center background
+
+Style:
+- very sparse or sparse
+- darker center area
+- subtle grid or linework around edges
+- no bright center glow
+- no large shapes behind the center
+- no text
+- no clutter
+
+Display 3: Right Inspiration
+Purpose:
+- more creative/inspirational private monitor
+- can be slightly more dynamic than Display 2
+- can use stronger theme accent shapes
+
+Style:
+- abstract geometry
+- cyberpunk linework
+- subtle motion-feel composition
+- medium density only when ThemePlan allows
+- no text
+
+Theme constraints:
+1. If ThemePlan visual_density is very_sparse:
+   - use very few lines/shapes
+   - keep opacity low
+   - center monitor almost plain
+
+2. If ThemePlan visual_density is sparse:
+   - subtle grid and limited accent shapes
+
+3. If ThemePlan visual_density is medium:
+   - more geometry allowed on Displays 4 and 3
+   - Display 2 stays sparse
+
+4. If ThemePlan cyberpunk_intensity is low:
+   - muted accents
+   - soft glow
+   - minimal grid
+
+5. If ThemePlan cyberpunk_intensity is high:
+   - stronger accent geometry on Displays 4 and 3
+   - Display 2 remains controlled
+
+6. If ThemePlan notes/body constraints include headache, sensory load, low sleep, fatigue:
+   - reduce brightness
+   - reduce density
+   - avoid aggressive red/orange
+   - avoid busy grids
+
+7. Display 2 must always be the least visually noisy wallpaper.
+
+Daily variation:
+Use a deterministic daily seed based on:
+- date
+- theme family
+- startup mode
+- display role
+- regenerate count if available
+
+The same date/theme should generate stable images.
+Different dates should produce visibly different images.
+
+Terminal output:
+During APPLYING stage, print something like:
+
+GENERATING PRIVATE WALLPAPERS
+display 4 -> left atmosphere
+display 2 -> center command
+display 3 -> right inspiration
+
+Then after generation:
+
+WALLPAPER OUTPUTS
+display 1 -> public poster: <path if available>
+display 4 -> left atmosphere: <path>
+display 2 -> center command: <path>
+display 3 -> right inspiration: <path>
+manifest . <path>
+
+chaseos> wallpapers generated locally.
+chaseos> no Windows wallpaper changes applied in Phase 6.
+
+Commands:
+Add or update:
+/wallpapers
+- Prints current generated wallpaper paths if available.
+
+/generate wallpapers
+- If a theme plan exists, generate or regenerate private wallpapers.
+- If no theme plan exists, print a friendly error.
+
+/status
+- Include whether public poster and private wallpapers have been generated.
+
+Do not make /generate wallpapers require the full ritual if a theme plan already exists.
+
+Manifest:
+Save wallpaper_manifest.json with:
+- date
+- generated_at
+- theme_family
+- startup_mode
+- wallpapers:
+  - display_4
+  - display_2
+  - display_3
+- public_poster_path if available
+- public_poster_included: true/false
+- source_policy:
+  private_wallpapers_use_checkin_text: false
+  private_wallpapers_use_public_takeaway: false
+  generated_locally: true
+  applied_to_windows: false
+
+Session:
+Update in-memory ritual session to store:
+- private_wallpaper_manifest
+- private_wallpaper_paths
+- private_wallpapers_generated: bool
+
+Testing:
+Add/update tests without launching GUI.
+
+Renderer tests:
+1. Display 4 wallpaper is created.
+2. Display 2 wallpaper is created.
+3. Display 3 wallpaper is created.
+4. Each image is exactly 1920x1080 by default.
+5. Images are valid PNGs.
+6. Display 2 output is generated with the center_command style.
+7. Renderer works with temp directory.
+8. Renderer does not require external fonts.
+
+Composer tests:
+1. WallpaperComposer generates all three private wallpapers.
+2. Manifest JSON is saved.
+3. Manifest includes Display 4, Display 2, and Display 3.
+4. Manifest includes theme family and startup mode.
+5. Manifest marks applied_to_windows false.
+6. Manifest does not include raw check-in text.
+7. Manifest does not include innovation takeaway text.
+8. Daily seed is stable for same date/theme.
+9. Different dates produce different output paths or metadata.
+
+StartupSequence tests:
+1. Full happy path reaches COMPLETE and generates public poster plus private wallpapers.
+2. APPLYING stage prints generated private wallpaper paths.
+3. /wallpapers prints current wallpaper paths after generation.
+4. /generate wallpapers works when a theme plan exists.
+5. /generate wallpapers fails gracefully when no theme plan exists.
+6. /status reports private wallpaper generation state.
+7. Raw check-in is not present in wallpaper manifest.
+8. Innovation takeaway is not present in private wallpaper manifest.
+9. No Windows wallpaper apply function is called.
+
+Safety tests:
+1. Private wallpapers do not render raw check-in text.
+2. Private wallpapers do not render innovation takeaway text.
+3. Wallpaper manifest does not expose sensitive private text.
+
+README update:
+Update README with:
+- Phase 6 status
+- Private monitor wallpaper generation
+- Display role mapping:
+  - Display 1 public poster
+  - Display 4 left atmosphere
+  - Display 2 center command
+  - Display 3 right inspiration
+- Output paths
+- /wallpapers command
+- /generate wallpapers command
+- Current limitations:
+  - no OpenAI yet
+  - no Lightroom photo indexing yet
+  - no real monitor detection yet
+  - no Windows wallpaper application yet
+
+Important restrictions:
+- Do not call OpenAI.
+- Do not use external services.
+- Do not index Lightroom photos.
+- Do not apply wallpapers to Windows.
+- Do not modify registry settings.
+- Do not modify taskbar pins or icons.
+- Do not add clinical questionnaires.
+- Do not diagnose the user.
+- Do not use clinical labels in output.
+- Do not require admin rights.
+
+Done criteria:
+1. `python -m chaseos` launches the app.
+2. User can complete the ritual.
+3. Public poster from Phase 5 still renders.
+4. Private wallpapers for Displays 4, 2, and 3 render locally.
+5. Display 4, 2, and 3 images are distinct.
+6. Display 2 is the lowest visual-noise wallpaper.
+7. Wallpaper manifest JSON is saved.
+8. /wallpapers prints current generated paths.
+9. /generate wallpapers works after a theme plan exists.
+10. No Windows wallpaper changes are applied.
+11. Unit tests pass.
+12. Full pytest suite passes.
+13. Ruff check passes.
+14. README is updated.

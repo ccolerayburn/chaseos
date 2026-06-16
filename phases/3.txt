@@ -1,0 +1,374 @@
+Phase 3: Implement the ChaseOS 15-minute ritual state machine.
+
+Context:
+Phase 1 created the ChaseOS scaffold.
+Phase 2 created the PySide6 tray app, terminal-style window, and command router.
+
+Project location:
+C:\_Codex\chaseos
+
+Run command:
+python -m chaseos
+
+Respect all rules in AGENTS.md.
+
+Goal:
+Implement the text-only ChaseOS 15-minute startup ritual engine and wire it into the existing terminal shell.
+
+This phase is about flow, state, timing, and terminal interaction only.
+
+Do not implement:
+- OpenAI calls
+- real check-in intelligence
+- wallpaper generation
+- poster generation
+- Lightroom photo indexing
+- Windows wallpaper application
+- registry changes
+- taskbar icon changes
+- clinical questionnaires
+- diagnosis language
+
+Product behavior:
+The user should be able to launch ChaseOS, type /start, and complete a full text-only version of the ritual through the terminal UI.
+
+The ritual should feel like a quiet amber-on-gray command sequence.
+
+Ritual stages:
+1. IDLE
+2. CHECK_IN
+3. INTERPRETING
+4. THEME_PLAN
+5. THEME_APPROVAL
+6. MINDFULNESS
+7. VERSE
+8. INNOVATION
+9. INNOVATION_TAKEAWAY
+10. POSTER_PLAN
+11. POSTER_APPROVAL
+12. WORK_RAMP
+13. APPLYING
+14. COMPLETE
+15. CANCELLED or RESET, if needed
+
+Target duration:
+15 minutes total.
+
+Suggested timing allocation:
+- Check-in: 2 minutes
+- Interpreting/theme plan: 2 minutes
+- Theme approval/revision: 1 minute
+- Mindfulness: 2 minutes
+- Verse/intention: 1.5 minutes
+- Innovation warmup: 3 minutes
+- Innovation takeaway/poster plan: 1 minute
+- Work ramp/apply/complete: 2.5 minutes
+
+Timer behavior:
+1. Add a ritual timer that starts when /start is entered.
+2. Header should show a countdown or elapsed/remaining placeholder.
+3. Timer should not block user input.
+4. If exact countdown UI is annoying in this phase, implement a clean timer object and update the terminal header at reasonable intervals.
+5. /status should show:
+   - current stage
+   - elapsed time
+   - remaining target time
+   - whether the ritual is active
+
+Architecture:
+Implement or update these files:
+
+src/chaseos/ritual/stages.py
+- Add RitualStage enum.
+
+src/chaseos/ritual/timer.py
+- Add RitualTimer.
+- Track started_at, target_minutes, elapsed, remaining, is_running.
+
+src/chaseos/ritual/startup_sequence.py
+- Add StartupSequence class.
+- Own the current stage.
+- Store current session data.
+- Accept normal text input and slash command results.
+- Return terminal-friendly response lines.
+- No GUI imports in this module.
+
+src/chaseos/ritual/prompts.py
+- Store ritual prompt text and placeholder warmups.
+
+src/chaseos/app/app_state.py
+- Store the active StartupSequence.
+- Track shell status.
+
+src/chaseos/app/command_router.py
+- Keep command parsing testable.
+- Add context hooks if needed, but do not make command parsing depend on PySide6.
+
+src/chaseos/app/terminal_window.py
+- Wire command input to the ritual sequence.
+- Normal text should be routed to the active ritual when appropriate.
+- Slash commands should go through the command router first.
+
+Basic flow:
+1. User types /start.
+2. ChaseOS enters CHECK_IN.
+3. Terminal prints:
+   chaseos> start sequence initialized.
+   chaseos> target duration: 15 minutes.
+   chaseos> how are you, really?
+
+4. User types a free-text answer.
+5. Save raw check-in text locally in the active session object.
+6. Move to INTERPRETING.
+7. For this phase, use placeholder interpretation:
+   - signals: low/medium practical placeholders
+   - startup mode: Structured Start
+   - summary:
+     "I’m reading this as a work-start state that needs structure. Real interpretation arrives in Phase 4."
+
+8. Move to THEME_PLAN.
+9. Print a placeholder theme plan:
+   THEME PLAN
+   mode ............ Structured Start
+   family .......... Obsidian Terminal
+   palette ......... graphite / muted amber / deep cyan
+   intensity ....... low-medium
+   density ......... sparse
+   display 1 ....... public innovation poster placeholder
+   display 4 ....... left atmosphere placeholder
+   display 2 ....... center command placeholder
+   display 3 ....... right inspiration placeholder
+
+10. Move to THEME_APPROVAL.
+11. Ask:
+   chaseos> approve this setup, change something, or regenerate?
+   chaseos> commands: /approve, /change <request>, /regenerate, /skip
+
+Theme approval behavior:
+- /approve moves to MINDFULNESS.
+- /change <free text> records the requested change and prints a revised placeholder plan.
+- /regenerate creates a slightly different placeholder theme plan.
+- /skip treats the theme as approved and moves on.
+- /theme prints the current theme plan.
+
+Mindfulness stage:
+Print a short placeholder mindfulness exercise:
+MINDFULNESS
+unclench your jaw.
+drop your shoulders.
+breathe in for 4.
+exhale for 6.
+repeat three times.
+one clean start is enough.
+
+Then allow:
+- /approve or /skip to move forward.
+- A normal text response like "done" should also move forward.
+
+Verse stage:
+Print a short placeholder verse block.
+Use local placeholder text for now if the real verse module is not implemented yet.
+
+VERSE
+tone ............ wisdom
+reference ....... placeholder
+text ............ verse module arrives in a later phase.
+intention ....... choose the next right action with patience and clarity.
+
+Then allow:
+- /approve
+- /skip
+- "done"
+to move forward.
+
+Innovation stage:
+Print a placeholder innovation warmup:
+INNOVATION WARMUP
+exercise ........ 10% Less Dumb
+prompt .......... what repeated work friction could become easier today?
+
+Then move to INNOVATION_TAKEAWAY and ask:
+chaseos> what is today’s useful insight?
+
+Innovation takeaway behavior:
+- User enters one sentence.
+- Save it as private innovation takeaway.
+- Move to POSTER_PLAN.
+
+Poster plan stage:
+For this phase, do not render an image.
+Generate placeholder public-safe poster information:
+
+PUBLIC POSTER PLAN
+display ......... 1
+size ............ 1080x1920
+style ........... Obsidian Signal
+quote ........... "Make the repeated thing easier."
+subtitle ........ Daily Innovation Signal
+source .......... innovation takeaway only
+
+Important:
+Do not use private check-in text in the poster plan.
+Even in placeholder mode, keep this separation clear.
+
+Move to POSTER_APPROVAL.
+Ask:
+chaseos> approve poster, change quote, or regenerate?
+chaseos> commands: /approve, /change <request>, /regenerate, /skip
+
+Poster approval behavior:
+- /approve moves to WORK_RAMP.
+- /change <free text> records the requested poster change and revises placeholder text.
+- /regenerate creates another placeholder quote.
+- /poster prints current poster plan.
+- /skip treats poster as approved and moves on.
+
+Work ramp stage:
+Print:
+
+WORK RAMP
+first sprint ..... 12 minutes
+1. open the ticket queue.
+2. pick one ticket.
+3. write the next visible action.
+4. do only that.
+5. reassess when the sprint ends.
+
+Then allow:
+- /approve
+- /skip
+- "done"
+to move to APPLYING.
+
+Applying stage:
+For this phase, do not generate or apply anything.
+Print placeholder application output:
+
+APPLYING
+display 1 -> public poster placeholder
+display 4 -> left atmosphere placeholder
+display 2 -> center command placeholder
+display 3 -> right inspiration placeholder
+
+chaseos> no files generated in Phase 3.
+chaseos> no wallpapers applied in Phase 3.
+
+Then move to COMPLETE.
+
+Complete stage:
+Print:
+chaseos> start sequence complete.
+chaseos> phase 3 ritual flow verified.
+chaseos> next phase: real local interpretation and theme planning.
+
+Session data:
+Add a lightweight in-memory session model for this phase.
+It should store:
+- started_at
+- completed_at if completed
+- current_stage
+- raw_check_in
+- placeholder_signals
+- startup_mode
+- theme_change_requests
+- theme_approved
+- innovation_takeaway
+- poster_change_requests
+- poster_approved
+
+Do not persist session JSON yet unless it is trivial and already supported.
+Persistence can come in a later phase.
+
+Command behavior:
+Update or preserve these commands:
+- /start starts ritual
+- /status shows ritual status
+- /reset resets active ritual to IDLE
+- /theme prints current theme plan if available
+- /poster prints current poster plan if available
+- /approve approves current approval stage or advances where appropriate
+- /change <free text> modifies current theme/poster approval stage where appropriate
+- /regenerate regenerates current theme/poster placeholder where appropriate
+- /skip advances skippable stages
+- /clear clears visible terminal output
+- /help prints commands
+- /exit exits the app
+
+Unknown command:
+Return a friendly unknown command message:
+chaseos> unknown command. type /help unless you enjoy guessing.
+
+Testing:
+Add or update tests without launching the GUI.
+
+Unit tests:
+1. StartupSequence starts in IDLE.
+2. /start moves to CHECK_IN.
+3. Free-text check-in is captured.
+4. After check-in, sequence reaches THEME_APPROVAL.
+5. /approve from THEME_APPROVAL moves to MINDFULNESS.
+6. /change from THEME_APPROVAL records a change request.
+7. /regenerate from THEME_APPROVAL updates the placeholder theme plan.
+8. Innovation takeaway is captured.
+9. Poster plan does not include raw check-in text.
+10. /approve from POSTER_APPROVAL moves to WORK_RAMP.
+11. Full happy path reaches COMPLETE.
+12. /reset returns sequence to IDLE.
+13. /status includes current stage and timer information.
+14. Unknown commands do not crash.
+15. Timer reports elapsed and remaining time.
+
+Integration-ish test:
+Simulate a full ritual with a list of inputs:
+- /start
+- "tired and scattered but ready to work"
+- /approve
+- done
+- done
+- "we keep repeating the same troubleshooting questions"
+- /approve
+- done
+
+Assert:
+- final stage is COMPLETE
+- raw check-in is stored privately
+- innovation takeaway is stored
+- public poster placeholder does not contain raw check-in
+- no image files are required for this phase
+
+README update:
+Update README with:
+- Phase 3 status
+- How to run the tray app
+- How to use /start
+- Current limitations:
+  - interpretation is placeholder
+  - theme plan is placeholder
+  - poster plan is placeholder
+  - no images generated yet
+  - no wallpapers applied yet
+  - no OpenAI yet
+
+Important restrictions:
+- Do not implement formal ADHD, depression, or anxiety questionnaires.
+- Do not diagnose the user.
+- Do not use clinical labels.
+- Do not call OpenAI.
+- Do not generate real images.
+- Do not apply wallpapers.
+- Do not index local photos.
+- Do not modify registry settings.
+- Do not modify taskbar pins or icons.
+- Do not require admin rights.
+
+Done criteria:
+1. `python -m chaseos` launches the tray app.
+2. User can run a full text-only ritual from /start to COMPLETE.
+3. Timer/status exists.
+4. Terminal header reflects active ritual state or timer.
+5. Theme and poster approval loops work with placeholders.
+6. Public poster plan never includes raw check-in text.
+7. Unit tests pass.
+8. Full pytest suite passes.
+9. Ruff check passes.
+10. README is updated.

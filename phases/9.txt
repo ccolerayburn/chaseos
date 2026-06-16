@@ -1,0 +1,257 @@
+We are continuing the existing Windows desktop app project ChaseOS.
+
+Do not restart planning from scratch. Continue from completed Phases 1-8. The repo is located at:
+
+C:\_Codex\chaseos
+
+Before implementing, check whether this is already a git repo. If not, initialize and commit current work:
+
+cd C:\_Codex\chaseos
+git init
+git add .
+git commit -m "Initial ChaseOS phases 1-8"
+
+Project summary:
+ChaseOS is a Windows tray app with a small terminal-style dark command window. It runs a 15-minute work startup ritual. It interprets one natural-language check-in into practical non-clinical work-start signals, generates a text-described cyberpunk/minimal theme, generates a public 1080x1920 innovation poster for Display 1, generates private wallpapers for Displays 4/2/3, and now needs to safely apply wallpapers per monitor.
+
+Existing completed phases:
+- Phase 1: scaffold, src-layout package, README, AGENTS.md, pyproject.toml, python -m chaseos entrypoint.
+- Phase 2: PySide6 tray shell, dark amber terminal window, command router.
+- Phase 3: 15-minute ritual state machine.
+- Phase 4: local deterministic check-in interpretation and theme generation.
+- Phase 5: public innovation poster engine, 1080x1920 Display 1 poster, poster safety/redaction, metadata archive.
+- Phase 6: generated private wallpapers for Displays 4, 2, and 3, plus wallpaper manifest.
+- Phase 7: Lightroom photo indexing and private hybrid photo wallpapers for Displays 4 and 3 only. Display 2 remains generated/minimal. Display 1 never uses general local photos.
+- Phase 8: Windows monitor detection, known fallback layout, monitor roles, role mapping, commands for monitor mapping, saved monitor_mapping.json, status reporting, wallpaper manifests include mapping metadata.
+
+Known monitor layout:
+- Display 1: portrait public-facing monitor, 1080x1920, Daily Public Innovation Poster.
+- Display 4: landscape private monitor, Left Atmosphere wallpaper.
+- Display 2: landscape private monitor, Center Command wallpaper.
+- Display 3: landscape private monitor, Right Inspiration wallpaper.
+
+Local photo source:
+C:\_Media\Photos\Lightroom\Export
+
+Important privacy/safety rules:
+- No OpenAI calls.
+- No diagnosis.
+- No clinical labels.
+- Public poster must never include private check-in details.
+- Public Display 1 must never use general Lightroom/local photos.
+- Approved Phase 5 public poster should be preserved when available.
+- Display 1 generated placeholder is fallback only.
+
+Implement Phase 9: Safe per-monitor wallpaper application on Windows.
+
+Phase 9 requirements:
+1. Use existing generated assets and monitor role mapping.
+2. Apply Display 1 public poster to the Public Signal Monitor.
+3. Apply Display 4 wallpaper to the Left Atmosphere Monitor.
+4. Apply Display 2 wallpaper to the Center Command Monitor.
+5. Apply Display 3 wallpaper to the Right Inspiration Monitor.
+6. Use dry-run by default.
+7. Require explicit confirmation for real wallpaper application.
+8. Save previous wallpaper state before applying so rollback is possible.
+9. Add /apply wallpapers --dry-run.
+10. Add /apply wallpapers --confirm.
+11. Add /reset wallpapers.
+12. Do not modify registry settings.
+13. Do not restart Explorer.
+14. Do not modify taskbar pins or icons.
+15. Do not require admin rights.
+16. Do not call OpenAI.
+17. Do not use general photos on Display 1.
+
+Implementation guidance:
+- Prefer the Windows IDesktopWallpaper COM API for per-monitor wallpaper application.
+- Do not use SystemParametersInfo for Phase 9 because it is not appropriate for safely applying different images to different monitors.
+- Use a Windows-only wrapper with graceful failure on non-Windows.
+- If comtypes is needed, add it as a Windows-only dependency:
+  comtypes; platform_system == "Windows"
+
+Suggested module structure:
+src/chaseos/wallpaper/
+  __init__.py
+  plan.py
+  applier.py
+  rollback.py
+  windows_desktop_wallpaper.py
+
+Responsibilities:
+- plan.py:
+  Build a WallpaperApplyPlan from:
+  - latest generated wallpaper manifest
+  - latest public poster if available
+  - latest monitor role mapping
+  The public role should use the approved/latest public poster when available, otherwise Display 1 placeholder fallback if the existing manifest provides it.
+  Never use Lightroom/general photos for public role.
+
+- windows_desktop_wallpaper.py:
+  Thin Windows-only wrapper around IDesktopWallpaper.
+  Methods should include:
+  - list_monitors()
+  - get_wallpaper(monitor_id)
+  - set_wallpaper(monitor_id, image_path)
+
+- rollback.py:
+  Save and load previous wallpaper state:
+  %LOCALAPPDATA%\ChaseOS\wallpaper_state\previous_wallpapers.json
+
+- applier.py:
+  Orchestrate:
+  - dry_run(plan)
+  - apply_confirmed(plan)
+  - reset()
+  Save apply manifest at:
+  %LOCALAPPDATA%\ChaseOS\wallpaper_state\last_apply_manifest.json
+
+Suggested dataclasses:
+
+@dataclass(frozen=True)
+class WallpaperTarget:
+    role: str
+    display_alias: str
+    monitor_id: str
+    label: str
+    image_path: Path
+    source: str
+
+@dataclass(frozen=True)
+class WallpaperApplyPlan:
+    targets: tuple[WallpaperTarget, ...]
+    generated_date: str
+    mapping_source: str
+
+Command behavior:
+
+/apply wallpapers
+- Defaults to dry-run.
+
+/apply wallpapers --dry-run
+- Loads monitor mapping.
+- Loads latest wallpaper/poster assets.
+- Validates all four role targets.
+- Validates images exist.
+- Validates public role image is not from Lightroom/general photo source.
+- Prints a readable dry-run summary.
+- Applies nothing.
+
+/apply wallpapers --confirm
+- Builds and validates the same plan.
+- Saves rollback state before making changes.
+- Applies each wallpaper per monitor.
+- Saves last_apply_manifest.json.
+- Prints a success/failure summary.
+
+/reset wallpapers
+- Loads previous_wallpapers.json.
+- Restores previous wallpaper paths per monitor.
+- Skips missing previous files with a clear message.
+- Does not crash if some previous paths are absent.
+
+Dry-run output should be similar to:
+
+CHASEOS // WALLPAPER APPLY DRY RUN
+
+Public Signal Monitor
+  Windows monitor: DISPLAY1
+  Role: public
+  Image: <path>
+
+Left Atmosphere Monitor
+  Windows monitor: DISPLAY4
+  Role: left
+  Image: <path>
+
+Center Command Monitor
+  Windows monitor: DISPLAY2
+  Role: center
+  Image: <path>
+
+Right Inspiration Monitor
+  Windows monitor: DISPLAY3
+  Role: right
+  Image: <path>
+
+No changes applied.
+Run /apply wallpapers --confirm to apply.
+
+Validation rules:
+- Required roles are public, left, center, right.
+- Duplicate roles should fail.
+- Missing image paths should fail.
+- Public role must reject any image path that appears to come from Lightroom/general photos.
+- Public role should prefer:
+  1. latest approved Phase 5 public poster
+  2. Display 1 placeholder fallback from generated manifest, only if no poster exists
+
+Tests:
+Add unit tests with a fake desktop wallpaper wrapper. Do not actually change Windows wallpapers during tests.
+
+Minimum tests:
+- /apply wallpapers defaults to dry-run.
+- /apply wallpapers --dry-run applies nothing.
+- /apply wallpapers --confirm saves rollback before setting wallpapers.
+- /apply wallpapers --confirm applies all four required roles.
+- Public role rejects Lightroom/general photo paths.
+- Missing required role fails.
+- Missing image path fails.
+- /reset wallpapers restores previous paths.
+- /reset wallpapers skips missing previous files.
+- Non-Windows wrapper fails gracefully.
+- Apply manifest is written after confirm.
+
+Update README:
+Add a Wallpaper Application section documenting:
+- /apply wallpapers --dry-run
+- /apply wallpapers --confirm
+- /reset wallpapers
+- Dry-run is default.
+- No registry modification.
+- No Explorer restart.
+- No admin requirement.
+- No taskbar/icon modification.
+- Display 1 never uses general local photos.
+
+Update AGENTS.md:
+Add Phase 9 guardrails:
+- Default to dry-run.
+- Require --confirm for real changes.
+- Save rollback before applying.
+- Use per-monitor Windows wallpaper API.
+- Do not modify registry settings.
+- Do not restart Explorer.
+- Do not require admin.
+- Do not call OpenAI.
+- Never apply general local photos to Display 1.
+
+Verification:
+Run:
+
+cd C:\_Codex\chaseos
+.\.venv\Scripts\python.exe -m pytest
+.\.venv\Scripts\python.exe -m ruff check .
+
+Then manually run:
+
+.\.venv\Scripts\python.exe -m chaseos
+
+And test in the app:
+/monitors
+/status
+/apply wallpapers --dry-run
+/apply wallpapers --confirm
+/reset wallpapers
+
+After implementation and passing checks, commit:
+
+git add .
+git commit -m "Add safe per-monitor wallpaper application"
+
+Report:
+- Files changed.
+- Commands added.
+- Test results.
+- Ruff result.
+- Any Windows API limitations or manual verification notes.
