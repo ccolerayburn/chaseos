@@ -18,6 +18,8 @@ def test_phase_two_commands_are_reserved() -> None:
     assert "/wallpapers" in KNOWN_COMMANDS
     assert "/generate" in KNOWN_COMMANDS
     assert "/apply" in KNOWN_COMMANDS
+    assert "/wallpaper" in KNOWN_COMMANDS
+    assert "/verify" in KNOWN_COMMANDS
     assert "/photos" in KNOWN_COMMANDS
     assert "/index" in KNOWN_COMMANDS
     assert "/photo" in KNOWN_COMMANDS
@@ -187,6 +189,23 @@ def test_reset_wallpapers_command_is_recognized() -> None:
 
     assert result.recognized is True
     assert result.command == "/reset wallpapers"
+
+
+def test_wallpaper_status_and_diagnostics_commands_are_recognized() -> None:
+    status = route_command("/wallpaper status")
+    diagnostics = route_command("/wallpaper diagnostics")
+
+    assert status.recognized is True
+    assert status.command == "/wallpaper status"
+    assert diagnostics.recognized is True
+    assert diagnostics.command == "/wallpaper diagnostics"
+
+
+def test_verify_wallpapers_command_is_recognized() -> None:
+    result = route_command("/verify wallpapers")
+
+    assert result.recognized is True
+    assert result.command == "/verify wallpapers"
 
 
 def test_photo_status_command_is_recognized() -> None:

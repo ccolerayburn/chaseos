@@ -68,12 +68,18 @@ assets, and eventually applies private wallpapers per monitor.
 - Real Windows wallpaper changes require `/apply wallpapers --confirm`.
 - Save rollback state before setting any wallpaper.
 - Use the per-monitor Windows wallpaper API for application.
+- Diagnostics must never apply wallpapers.
+- Verification must never apply wallpapers.
+- Confirmed apply must refuse unresolved monitor IDs.
+- Prefer exact monitor ID matching, then device path, then rectangle.
+- Display alias fallback is allowed for reporting only, not blind confirmed apply.
 - Do not modify registry settings.
 - Do not restart Explorer.
 - Do not require admin rights.
 - Do not modify taskbar pins or icons.
 - Do not call OpenAI.
 - Never apply general local photos to Display 1.
+- Do not weaken Display 1 privacy protections.
 
 ## Monitor Layout Rules
 

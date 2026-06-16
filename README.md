@@ -296,7 +296,9 @@ Display 1 public poster restrictions:
 
 ## Wallpaper Application
 
-Phase 9 adds safe per-monitor Windows wallpaper application.
+Phase 9 adds safe per-monitor Windows wallpaper application. Phase 10 adds diagnostics
+and strict preflight verification so ChaseOS can reconcile its Display 1/4/2/3 role
+model with real Windows `IDesktopWallpaper` monitor IDs before any confirmed apply.
 
 Dry-run is the default:
 
@@ -317,6 +319,44 @@ Rollback:
 /reset wallpapers
 ```
 
+Wallpaper verification workflow:
+
+1. Run:
+
+```text
+/wallpaper status
+```
+
+2. Run:
+
+```text
+/wallpaper diagnostics
+```
+
+3. Run:
+
+```text
+/verify wallpapers
+```
+
+4. Run:
+
+```text
+/apply wallpapers --dry-run
+```
+
+5. Only after verifying the mapping manually, run:
+
+```text
+/apply wallpapers --confirm
+```
+
+6. To rollback:
+
+```text
+/reset wallpapers
+```
+
 Application state is saved under:
 
 ```text
@@ -326,13 +366,29 @@ Application state is saved under:
 
 Safety rules:
 
+- Phase 10 still defaults to no wallpaper changes.
+- `/verify wallpapers` and `/wallpaper diagnostics` never apply wallpapers.
+- `/apply wallpapers --confirm` is the only real apply command.
 - ChaseOS saves previous wallpaper state before applying new wallpaper paths.
 - ChaseOS uses the per-monitor Windows wallpaper API.
+- ChaseOS resolves monitor IDs by exact ID, device path, then rectangle.
+- Confirmed apply refuses unresolved Windows monitor IDs.
 - ChaseOS does not modify registry settings.
 - ChaseOS does not restart Explorer.
 - ChaseOS does not require admin rights.
 - ChaseOS does not modify taskbar pins or icons.
 - Display 1 never uses general local photos.
+
+If monitor mapping looks wrong, use the existing monitor commands:
+
+- `/monitors`
+- `/detect monitors`
+- `/monitor roles`
+- `/assign display 1 public`
+- `/assign display 4 left`
+- `/assign display 2 center`
+- `/assign display 3 right`
+- `/save monitors`
 
 ## Current Limitations
 

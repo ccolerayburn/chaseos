@@ -37,7 +37,15 @@ class WallpaperApplier:
     def last_apply_manifest_path(self) -> Path:
         return get_last_apply_manifest_path(self.base_path)
 
-    def dry_run(self, plan: WallpaperApplyPlan) -> tuple[str, ...]:
+    def dry_run(self, plan: WallpaperApplyPlan, diagnostics=None) -> tuple[str, ...]:
+        if diagnostics is not None and diagnostics.targets:
+            return (
+                "CHASEOS // WALLPAPER APPLY DRY RUN",
+                "",
+                *_diagnostic_target_lines(diagnostics.targets),
+                "No changes applied.",
+                "Run /apply wallpapers --confirm to apply.",
+            )
         return (
             *_plan_summary_lines(plan, title="CHASEOS // WALLPAPER APPLY DRY RUN"),
             "",
@@ -45,17 +53,30 @@ class WallpaperApplier:
             "Run /apply wallpapers --confirm to apply.",
         )
 
-    def apply_confirmed(self, plan: WallpaperApplyPlan) -> tuple[str, ...]:
+    def apply_confirmed(
+        self,
+        plan: WallpaperApplyPlan,
+        resolved_monitor_ids: dict[str, str] | None = None,
+    ) -> tuple[str, ...]:
         client = self._client()
+        resolved_monitor_ids = resolved_monitor_ids or {
+            target.monitor_id: target.monitor_id for target in plan.targets
+        }
         previous = {
-            target.monitor_id: client.get_wallpaper(target.monitor_id)
+            resolved_monitor_ids[target.monitor_id]: client.get_wallpaper(
+                resolved_monitor_ids[target.monitor_id]
+            )
             for target in plan.targets
         }
         self.rollback_store.save(previous)
 
         applied: list[WallpaperTarget] = []
         for target in plan.targets:
-            client.set_wallpaper(target.monitor_id, str(target.image_path))
+            monitor_id = resolved_monitor_ids[target.monitor_id]
+            try:
+                client.set_wallpaper(monitor_id, str(target.image_path))
+            except Exception as exc:
+                raise WallpaperApplyError(f"failed to set {target.label}: {exc}") from exc
             applied.append(target)
 
         self._save_apply_manifest(plan, applied)
@@ -138,3 +159,40 @@ def _plan_summary_lines(plan: WallpaperApplyPlan, title: str) -> tuple[str, ...]
             )
         )
     return tuple(lines[:-1])
+
+
+def _diagnostic_target_lines(targets) -> tuple[str, ...]:
+    lines: list[str] = []
+    for reconciled in targets:
+        target = reconciled.target
+        dimensions = (
+            f"{reconciled.image_width}x{reconciled.image_height}"
+            if reconciled.image_width and reconciled.image_height
+            else "unreadable"
+        )
+        lines.extend(
+            (
+                target.label,
+                f"  Role: {target.role}",
+                f"  Display alias: {target.display_alias}",
+                f"  Image: {target.image_path}",
+                f"  Image source: {_source_label(target)}",
+                f"  Image dimensions: {dimensions}",
+                (
+                    "  Resolved IDesktopWallpaper monitor ID: "
+                    f"{reconciled.resolved_monitor_id or 'unresolved'}"
+                ),
+                f"  Mapping confidence: {reconciled.mapping_confidence}",
+            )
+        )
+        lines.extend(f"  Warning: {warning}" for warning in reconciled.warnings)
+        lines.append("")
+    return tuple(lines)
+
+
+def _source_label(target: WallpaperTarget) -> str:
+    if target.source == "approved_public_poster":
+        return "public_poster"
+    if target.source == "placeholder_public_signal":
+        return "display_1_placeholder"
+    return "generated_manifest"

@@ -47,6 +47,8 @@ KNOWN_COMMANDS = (
     "/exit",
     "/reset",
     "/apply",
+    "/wallpaper",
+    "/verify",
     "/theme",
     "/poster",
     "/approve",
@@ -80,6 +82,9 @@ HELP_LINES = (
     TerminalLine("chaseos", "/generate wallpapers - generate private wallpapers if a theme exists"),
     TerminalLine("chaseos", "/apply wallpapers --dry-run - preview per-monitor wallpaper changes"),
     TerminalLine("chaseos", "/apply wallpapers --confirm - apply wallpapers to Windows"),
+    TerminalLine("chaseos", "/wallpaper status - report apply readiness without changes"),
+    TerminalLine("chaseos", "/wallpaper diagnostics - write monitor mapping diagnostics"),
+    TerminalLine("chaseos", "/verify wallpapers - strict no-change wallpaper preflight"),
     TerminalLine("chaseos", "/reset wallpapers - restore previous per-monitor wallpapers"),
     TerminalLine("chaseos", "/photos - print local photo index status"),
     TerminalLine("chaseos", "/index photos - index the private Lightroom export folder"),
@@ -256,6 +261,20 @@ class CommandRouter:
                 action="respond",
                 command=command,
                 lines=(TerminalLine("chaseos", "wallpaper paths command recognized."),),
+            )
+        if command == "/wallpaper" and argument in {"status", "diagnostics"}:
+            return CommandResult(
+                action="respond",
+                command=f"/wallpaper {argument}",
+                argument=argument,
+                lines=(TerminalLine("chaseos", f"wallpaper {argument} command recognized."),),
+            )
+        if command == "/verify" and argument == "wallpapers":
+            return CommandResult(
+                action="respond",
+                command="/verify wallpapers",
+                argument=argument,
+                lines=(TerminalLine("chaseos", "verify wallpapers command recognized."),),
             )
         if command == "/photos":
             return CommandResult(

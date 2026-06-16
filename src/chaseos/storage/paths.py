@@ -63,3 +63,7 @@ def get_previous_wallpapers_path(base_path: Path | str | None = None) -> Path:
 
 def get_last_apply_manifest_path(base_path: Path | str | None = None) -> Path:
     return get_wallpaper_state_dir(base_path) / "last_apply_manifest.json"
+
+
+def get_last_wallpaper_diagnostics_path(base_path: Path | str | None = None) -> Path:
+    return get_wallpaper_state_dir(base_path) / "last_wallpaper_diagnostics.json"

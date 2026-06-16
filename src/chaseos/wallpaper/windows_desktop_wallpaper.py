@@ -3,11 +3,23 @@
 from __future__ import annotations
 
 import platform
+from dataclasses import dataclass
 from typing import Protocol
 
 
 class DesktopWallpaperError(RuntimeError):
     """Raised when per-monitor wallpaper APIs are unavailable."""
+
+
+@dataclass(frozen=True)
+class DesktopWallpaperMonitor:
+    index: int
+    monitor_id: str
+    wallpaper_path: str | None
+    left: int | None = None
+    top: int | None = None
+    right: int | None = None
+    bottom: int | None = None
 
 
 class DesktopWallpaperClient(Protocol):
@@ -19,6 +31,9 @@ class DesktopWallpaperClient(Protocol):
 
     def set_wallpaper(self, monitor_id: str, image_path: str) -> None:
         """Set one monitor wallpaper."""
+
+    def describe_monitors(self) -> tuple[DesktopWallpaperMonitor, ...]:
+        """Return monitor IDs with current wallpaper and bounds when available."""
 
 
 class WindowsDesktopWallpaper:
@@ -48,6 +63,31 @@ class WindowsDesktopWallpaper:
             str(self._desktop_wallpaper.GetMonitorDevicePathAt(index))
             for index in range(count)
         )
+
+    def describe_monitors(self) -> tuple[DesktopWallpaperMonitor, ...]:
+        monitors: list[DesktopWallpaperMonitor] = []
+        for index, monitor_id in enumerate(self.list_monitors()):
+            left = top = right = bottom = None
+            try:
+                rect = self._desktop_wallpaper.GetMonitorRECT(monitor_id)
+                left = int(rect.left)
+                top = int(rect.top)
+                right = int(rect.right)
+                bottom = int(rect.bottom)
+            except Exception:
+                pass
+            monitors.append(
+                DesktopWallpaperMonitor(
+                    index=index,
+                    monitor_id=monitor_id,
+                    wallpaper_path=self.get_wallpaper(monitor_id),
+                    left=left,
+                    top=top,
+                    right=right,
+                    bottom=bottom,
+                )
+            )
+        return tuple(monitors)
 
     def get_wallpaper(self, monitor_id: str) -> str | None:
         wallpaper = self._desktop_wallpaper.GetWallpaper(monitor_id)

@@ -1,0 +1,347 @@
+We are continuing the existing Windows desktop app project ChaseOS.
+
+Do not restart planning from scratch. Continue from completed Phases 1-9.
+
+Repo location:
+
+C:\_Codex\chaseos
+
+Current Phase 9 commit:
+
+47271a7 Add safe per-monitor wallpaper application
+
+Phase 9 added safe per-monitor wallpaper application using existing generated assets and monitor role mapping.
+
+Phase 9 verification reported:
+
+170 passed in 4.04s
+ruff: All checks passed!
+
+Phase 9 notes:
+- No real wallpaper changes were applied.
+- /apply wallpapers defaults to dry-run.
+- Real changes require /apply wallpapers --confirm.
+- Rollback state is saved before setting wallpapers.
+- Non-Windows or missing COM support fails gracefully.
+- Manual GUI smoke was not run, so /apply wallpapers --confirm and /reset wallpapers have not been executed against the actual desktop.
+
+Important project rules:
+- No OpenAI calls.
+- No diagnosis.
+- No clinical labels.
+- Public poster must never include private check-in details.
+- Public Display 1 must never use general Lightroom/local photos.
+- Display 1 should use the approved/latest Phase 5 public poster when available.
+- Display 1 generated placeholder is fallback only.
+- Do not modify registry settings.
+- Do not restart Explorer.
+- Do not modify taskbar pins or icons.
+- Do not require admin rights.
+
+Known monitor layout:
+- Display 1: portrait public-facing monitor, 1080x1920, Daily Public Innovation Poster.
+- Display 4: landscape private monitor, Left Atmosphere wallpaper.
+- Display 2: landscape private monitor, Center Command wallpaper.
+- Display 3: landscape private monitor, Right Inspiration wallpaper.
+
+Local photo source:
+C:\_Media\Photos\Lightroom\Export
+
+Implement Phase 10: Wallpaper diagnostics, monitor-ID reconciliation, and manual smoke readiness.
+
+Goal:
+Phase 9 implemented the actual wallpaper application boundary. Phase 10 should harden and verify that ChaseOS can safely map its Display 1/4/2/3 role model to the real Windows IDesktopWallpaper monitor IDs before the user runs /apply wallpapers --confirm on their actual desktop.
+
+Do not redesign the app.
+Do not add a dashboard.
+Keep the terminal-style command UX.
+Do not apply wallpapers automatically during tests.
+
+Phase 10 requirements:
+
+1. Audit Phase 9 implementation
+- Inspect the Phase 9 wallpaper modules:
+  - src/chaseos/wallpaper/plan.py
+  - src/chaseos/wallpaper/applier.py
+  - src/chaseos/wallpaper/rollback.py
+  - src/chaseos/wallpaper/windows_desktop_wallpaper.py
+- Confirm command routing for:
+  - /apply wallpapers
+  - /apply wallpapers --dry-run
+  - /apply wallpapers --confirm
+  - /reset wallpapers
+- Do not rewrite these modules unnecessarily.
+- Preserve working tests.
+
+2. Add monitor-ID reconciliation
+The main Phase 10 risk is whether the monitor IDs stored by ChaseOS mapping are exactly the IDs needed by Windows IDesktopWallpaper.
+
+Improve the Windows desktop wallpaper wrapper and/or plan builder so ChaseOS can reconcile monitors using the strongest available evidence.
+
+Preferred matching order:
+1. Existing saved IDesktopWallpaper monitor ID, if present.
+2. Exact match against saved monitor device path, if present.
+3. Rectangle match using monitor bounds from ChaseOS monitor detection and IDesktopWallpaper monitor rectangles.
+4. Display alias fallback only for diagnostics/warnings, not for confirmed wallpaper application unless it can resolve to a real IDesktopWallpaper monitor ID.
+
+Add support in the Windows desktop wallpaper wrapper for retrieving monitor rectangles if possible.
+
+Suggested monitor model:
+
+@dataclass(frozen=True)
+class DesktopWallpaperMonitor:
+    index: int
+    monitor_id: str
+    wallpaper_path: str | None
+    left: int | None = None
+    top: int | None = None
+    right: int | None = None
+    bottom: int | None = None
+
+Confirmed wallpaper application should refuse to run if any required role cannot be resolved to a real IDesktopWallpaper monitor ID with adequate confidence.
+
+Dry-run and diagnostics should explain unresolved or low-confidence mappings clearly.
+
+3. Add wallpaper diagnostics commands
+
+Add these terminal commands:
+
+/wallpaper status
+/wallpaper diagnostics
+/verify wallpapers
+
+Command behavior:
+
+/wallpaper status
+Should report:
+- Latest generated wallpaper manifest date/path.
+- Latest public poster path, if found.
+- Whether Display 1 is using public poster or fallback placeholder.
+- Monitor mapping source.
+- Whether rollback state exists.
+- Whether last apply manifest exists.
+- Whether Windows per-monitor wallpaper API is available.
+- No wallpaper changes applied.
+
+/wallpaper diagnostics
+Should report:
+- ChaseOS role mapping:
+  - public
+  - left
+  - center
+  - right
+- Display aliases:
+  - Display 1
+  - Display 4
+  - Display 2
+  - Display 3
+- Resolved IDesktopWallpaper monitor IDs, if available.
+- Current wallpaper path per monitor, if available.
+- Monitor rectangle/bounds, if available.
+- Mapping confidence:
+  - exact-id
+  - exact-device-path
+  - rectangle
+  - unresolved
+- Any warnings:
+  - missing public poster
+  - using Display 1 fallback placeholder
+  - missing generated wallpaper
+  - public image path appears to come from Lightroom/general photos
+  - COM unavailable
+  - role cannot be resolved to a Windows monitor
+- No wallpaper changes applied.
+
+Also save diagnostics JSON to:
+
+%LOCALAPPDATA%\ChaseOS\wallpaper_state\last_wallpaper_diagnostics.json
+
+/verify wallpapers
+Should perform a strict preflight validation for real application:
+- All four required roles exist:
+  - public
+  - left
+  - center
+  - right
+- All four images exist.
+- Public image is not from Lightroom/general photos.
+- Public poster image is 1080x1920 when using the approved public poster.
+- Private wallpapers are readable image files.
+- Windows per-monitor wallpaper API is available on Windows.
+- All four roles resolve to real IDesktopWallpaper monitor IDs.
+- No duplicate monitor IDs.
+- Rollback directory is writable.
+- Apply manifest path is writable.
+- No wallpaper changes applied.
+
+Output should clearly end with either:
+
+CHASEOS // WALLPAPER PREFLIGHT PASSED
+No changes applied.
+Run /apply wallpapers --confirm only if the mapping above looks correct.
+
+or:
+
+CHASEOS // WALLPAPER PREFLIGHT FAILED
+No changes applied.
+Fix the items above before using /apply wallpapers --confirm.
+
+4. Improve dry-run output
+
+Update /apply wallpapers --dry-run so it includes:
+- Role.
+- Display alias.
+- Human label.
+- Image path.
+- Image source:
+  - public_poster
+  - generated_manifest
+  - display_1_placeholder
+- Image dimensions.
+- Resolved IDesktopWallpaper monitor ID, if available.
+- Mapping confidence.
+- Warnings, if any.
+
+It should still apply nothing.
+
+5. Keep /apply wallpapers --confirm strict
+
+Before applying wallpapers for real:
+- Run the same strict validation used by /verify wallpapers.
+- Refuse to apply if any required monitor mapping is unresolved.
+- Refuse to apply if the public role points to Lightroom/general photo source.
+- Refuse to apply if any image is missing.
+- Save rollback state before setting any wallpaper.
+- If setting one wallpaper fails after rollback has been saved, report which target failed.
+- Do not restart Explorer.
+- Do not modify registry settings.
+- Do not require admin.
+
+6. Add rollback status visibility
+
+Enhance /wallpaper status or /wallpaper diagnostics so it can show:
+- previous_wallpapers.json exists or does not exist.
+- saved_at timestamp if present.
+- number of rollback entries.
+- missing previous wallpaper paths, if any.
+
+Do not change /reset wallpapers semantics unless needed for better error reporting.
+
+7. README update
+
+Update README with a Phase 10 section:
+
+Wallpaper verification workflow:
+
+1. Run:
+
+/wallpaper status
+
+2. Run:
+
+/wallpaper diagnostics
+
+3. Run:
+
+/verify wallpapers
+
+4. Run:
+
+/apply wallpapers --dry-run
+
+5. Only after verifying mapping manually, run:
+
+/apply wallpapers --confirm
+
+6. To rollback:
+
+/reset wallpapers
+
+Document that:
+- Phase 10 still defaults to no wallpaper changes.
+- /verify wallpapers and /wallpaper diagnostics never apply wallpapers.
+- /apply wallpapers --confirm is the only real apply command.
+- Display 1 never uses general local photos.
+- If monitor mapping looks wrong, use existing monitor commands:
+  - /monitors
+  - /detect monitors
+  - /monitor roles
+  - /assign display 1 public
+  - /assign display 4 left
+  - /assign display 2 center
+  - /assign display 3 right
+  - /save monitors
+
+8. AGENTS.md update
+
+Add Phase 10 guardrails:
+- Diagnostics must never apply wallpapers.
+- Verification must never apply wallpapers.
+- Confirmed apply must refuse unresolved monitor IDs.
+- Prefer exact monitor ID matching, then device path, then rectangle.
+- Display alias fallback is allowed for reporting only, not blind confirmed apply.
+- Do not weaken Display 1 privacy protections.
+- Do not modify registry settings.
+- Do not restart Explorer.
+- Do not require admin.
+- Do not call OpenAI.
+
+9. Tests
+
+Add unit tests without touching real Windows wallpapers.
+
+Use fake desktop wallpaper wrappers and temporary image files.
+
+Minimum tests:
+- /wallpaper status reports no rollback state cleanly.
+- /wallpaper status reports rollback state when previous_wallpapers.json exists.
+- /wallpaper diagnostics writes last_wallpaper_diagnostics.json.
+- /wallpaper diagnostics reports COM unavailable gracefully.
+- /verify wallpapers passes with all four roles, valid images, and resolved monitor IDs.
+- /verify wallpapers fails when a role is missing.
+- /verify wallpapers fails when an image is missing.
+- /verify wallpapers fails when public image path points to Lightroom/general photos.
+- /verify wallpapers fails when public poster has wrong dimensions.
+- /verify wallpapers fails when a monitor ID is unresolved.
+- /verify wallpapers fails when duplicate monitor IDs are resolved.
+- /apply wallpapers --dry-run includes image dimensions and mapping confidence.
+- /apply wallpapers --confirm refuses unresolved monitor IDs.
+- Existing Phase 9 apply and reset tests still pass.
+
+10. Verification
+
+Run:
+
+cd C:\_Codex\chaseos
+.\.venv\Scripts\python.exe -m pytest
+.\.venv\Scripts\python.exe -m ruff check .
+
+Then do a non-mutating manual app smoke only:
+
+.\.venv\Scripts\python.exe -m chaseos
+
+Run these commands in ChaseOS:
+
+/wallpaper status
+/wallpaper diagnostics
+/verify wallpapers
+/apply wallpapers --dry-run
+
+Do not run /apply wallpapers --confirm automatically.
+Do not run /reset wallpapers automatically unless explicitly instructed later.
+
+11. Commit
+
+After implementation and passing checks:
+
+git add .
+git commit -m "Add wallpaper diagnostics and preflight verification"
+
+Report:
+- Files changed.
+- Commands added.
+- Any changes to Phase 9 behavior.
+- Test result.
+- Ruff result.
+- Manual non-mutating smoke result, if run.
+- Whether the real desktop still needs a user-approved /apply wallpapers --confirm test.

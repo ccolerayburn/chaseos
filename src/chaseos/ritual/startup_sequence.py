@@ -32,6 +32,7 @@ from chaseos.ritual.timer import RITUAL_TARGET_MINUTES, RitualTimer
 from chaseos.storage.settings_store import MonitorMappingStore
 from chaseos.theming.theme_generator import ThemeGenerator
 from chaseos.wallpaper.applier import WallpaperApplier, WallpaperApplyError
+from chaseos.wallpaper.diagnostics import WallpaperDiagnosticsService
 from chaseos.wallpaper.photo_indexer import PhotoLibraryIndexer
 from chaseos.wallpaper.photo_source import PhotoSourceConfig
 from chaseos.wallpaper.plan import WallpaperApplyPlanner, WallpaperPlanError
@@ -120,6 +121,11 @@ class StartupSequence:
             photo_config=self.photo_config,
         )
         self.wallpaper_applier = wallpaper_applier or WallpaperApplier(base_path=self.data_dir)
+        self.wallpaper_diagnostics = WallpaperDiagnosticsService(
+            planner=self.wallpaper_planner,
+            client=self.wallpaper_applier.client,
+            base_path=self.data_dir,
+        )
 
     @property
     def current_stage(self) -> RitualStage:
@@ -171,6 +177,12 @@ class StartupSequence:
             return SequenceResponse(self.poster_lines_or_placeholder())
         if result.command == "/wallpapers":
             return SequenceResponse(self.wallpaper_lines_or_placeholder())
+        if result.command == "/wallpaper status":
+            return self.handle_wallpaper_status()
+        if result.command == "/wallpaper diagnostics":
+            return self.handle_wallpaper_diagnostics()
+        if result.command == "/verify wallpapers":
+            return self.handle_verify_wallpapers()
         if result.command == "/generate wallpapers":
             return self.handle_generate_wallpapers()
         if result.command == "/apply wallpapers":
@@ -492,15 +504,30 @@ class StartupSequence:
         try:
             layout = self.detect_and_assign_monitors(use_saved=True)
             plan = self.wallpaper_planner.build_plan(layout)
+            diagnostics = self.wallpaper_diagnostics.build(layout)
             lines = (
-                self.wallpaper_applier.apply_confirmed(plan)
+                self._apply_confirmed_after_preflight(plan, diagnostics)
                 if confirm
-                else self.wallpaper_applier.dry_run(plan)
+                else self.wallpaper_applier.dry_run(plan, diagnostics=diagnostics)
             )
         except (WallpaperPlanError, WallpaperApplyError, OSError, ValueError) as exc:
             return SequenceResponse((TerminalLine("chaseos", f"wallpaper apply failed: {exc}"),))
 
         return SequenceResponse(_chaseos_lines(tuple(lines)))
+
+    def _apply_confirmed_after_preflight(self, plan, diagnostics) -> tuple[str, ...]:
+        issues = self.wallpaper_diagnostics.strict_issues(diagnostics)
+        if issues:
+            lines = ["CHASEOS // WALLPAPER APPLY REFUSED", ""]
+            lines.extend(f"issue: {issue}" for issue in issues)
+            lines.extend(("No changes applied.",))
+            return tuple(lines)
+        resolved_ids = {
+            target.target.monitor_id: target.resolved_monitor_id
+            for target in diagnostics.targets
+            if target.resolved_monitor_id
+        }
+        return self.wallpaper_applier.apply_confirmed(plan, resolved_monitor_ids=resolved_ids)
 
     def handle_reset_wallpapers(self) -> SequenceResponse:
         try:
@@ -508,6 +535,20 @@ class StartupSequence:
         except (WallpaperApplyError, OSError, ValueError) as exc:
             return SequenceResponse((TerminalLine("chaseos", f"wallpaper reset failed: {exc}"),))
         return SequenceResponse(_chaseos_lines(tuple(lines)))
+
+    def handle_wallpaper_status(self) -> SequenceResponse:
+        layout = self.detect_and_assign_monitors(use_saved=True)
+        return SequenceResponse(_chaseos_lines(self.wallpaper_diagnostics.status_lines(layout)))
+
+    def handle_wallpaper_diagnostics(self) -> SequenceResponse:
+        layout = self.detect_and_assign_monitors(use_saved=True)
+        return SequenceResponse(
+            _chaseos_lines(self.wallpaper_diagnostics.diagnostics_lines(layout))
+        )
+
+    def handle_verify_wallpapers(self) -> SequenceResponse:
+        layout = self.detect_and_assign_monitors(use_saved=True)
+        return SequenceResponse(_chaseos_lines(self.wallpaper_diagnostics.verify_lines(layout)))
 
     def handle_index_photos(self) -> SequenceResponse:
         if not self.photo_indexer.source_exists():
