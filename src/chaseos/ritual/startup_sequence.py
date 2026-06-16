@@ -10,6 +10,7 @@ from pathlib import Path
 
 from chaseos import __version__
 from chaseos.app.command_router import CommandResult, TerminalLine, route_command
+from chaseos.app.readiness import ReadinessService
 from chaseos.interpretation.checkin_interpreter import LocalCheckInInterpreter
 from chaseos.models.assets import WallpaperManifest
 from chaseos.models.monitor import (
@@ -129,6 +130,10 @@ class StartupSequence:
             client=self.wallpaper_applier.client,
             base_path=self.data_dir,
         )
+        self.readiness = ReadinessService(
+            base_path=self.data_dir,
+            photo_config=self.photo_config,
+        )
 
     @property
     def current_stage(self) -> RitualStage:
@@ -156,6 +161,8 @@ class StartupSequence:
             return self.start()
         if result.command == "/version":
             return SequenceResponse(self.version_lines())
+        if result.command == "/doctor":
+            return SequenceResponse(_chaseos_lines(self.readiness.doctor_lines()))
         if result.command == "/reset monitors":
             return self.handle_reset_monitors()
         if result.command == "/reset wallpapers":
@@ -182,6 +189,12 @@ class StartupSequence:
             return SequenceResponse(self.poster_lines_or_placeholder())
         if result.command == "/wallpapers":
             return SequenceResponse(self.wallpaper_lines_or_placeholder())
+        if result.command == "/assets status":
+            return SequenceResponse(_chaseos_lines(self.readiness.assets_status_lines()))
+        if result.command == "/prepare wallpapers":
+            return SequenceResponse(
+                _chaseos_lines(self.readiness.prepare_wallpapers_lines(result.argument or ""))
+            )
         if result.command == "/wallpaper status":
             return self.handle_wallpaper_status()
         if result.command == "/wallpaper diagnostics":

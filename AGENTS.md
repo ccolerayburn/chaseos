@@ -95,6 +95,20 @@ assets, and eventually applies private wallpapers per monitor.
 - Do not require admin.
 - Do not call OpenAI.
 
+## First-Run Readiness Rules
+
+- `/doctor` must never mutate desktop state.
+- `/assets status` must never mutate desktop state.
+- `/prepare wallpapers` may write generated assets and manifests but must never apply wallpapers.
+- `/prepare wallpapers` requires an explicit innovation takeaway for the public poster.
+- Public poster content must come only from the innovation takeaway.
+- Public Display 1 must never use Lightroom/general photos.
+- Do not weaken Phase 9/10/11 wallpaper safety gates.
+- Do not modify registry settings.
+- Do not restart Explorer.
+- Do not require admin.
+- Do not call OpenAI.
+
 ## Monitor Layout Rules
 
 - Display 1: portrait public-facing monitor, public innovation poster.

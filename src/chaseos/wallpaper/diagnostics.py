@@ -179,6 +179,14 @@ class WallpaperDiagnosticsService:
                 f"{'yes' if diagnostics.last_apply_manifest_exists else 'no'}"
             ),
             f"Windows per-monitor API available: {'yes' if diagnostics.api_available else 'no'}",
+            *(
+                (
+                    "Generated wallpaper manifest missing.",
+                    "Run /assets status for details.",
+                )
+                if manifest is None
+                else ()
+            ),
             "No wallpaper changes applied.",
         )
 
@@ -251,17 +259,20 @@ class WallpaperDiagnosticsService:
             client = self.client or WindowsDesktopWallpaper()
             try:
                 return client.describe_monitors(), None
-            except AttributeError:
-                monitors = tuple(
-                    DesktopWallpaperMonitor(
-                        index=index,
-                        monitor_id=monitor_id,
-                        wallpaper_path=client.get_wallpaper(monitor_id),
+            except Exception as exc:
+                try:
+                    monitors = tuple(
+                        DesktopWallpaperMonitor(
+                            index=index,
+                            monitor_id=monitor_id,
+                            wallpaper_path=client.get_wallpaper(monitor_id),
+                        )
+                        for index, monitor_id in enumerate(client.list_monitors())
                     )
-                    for index, monitor_id in enumerate(client.list_monitors())
-                )
-                return monitors, None
-        except (DesktopWallpaperError, OSError, RuntimeError) as exc:
+                    return monitors, None
+                except Exception:
+                    return (), str(exc)
+        except (DesktopWallpaperError, OSError, RuntimeError, AttributeError) as exc:
             return (), str(exc)
 
     def _reconcile_targets(

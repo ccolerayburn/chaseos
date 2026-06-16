@@ -171,6 +171,8 @@ def _exit_code_for_output(output: tuple[str, ...], result: CommandResult) -> int
     text = "\n".join(output)
     failure_markers = (
         "PREFLIGHT FAILED",
+        "DOCTOR FAILED",
+        "PREPARE WALLPAPERS FAILED",
         "APPLY REFUSED",
         "wallpaper apply failed:",
         "wallpaper reset failed:",

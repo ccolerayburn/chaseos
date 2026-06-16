@@ -450,6 +450,64 @@ Rollback is also desktop-changing:
 
 The unlock flag does not bypass Phase 9/10 validation.
 
+## First-Run Readiness
+
+Refresh dependencies, including the Windows-only wallpaper API support:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -e .
+```
+
+Run the doctor:
+
+```powershell
+.\.venv\Scripts\python.exe -m chaseos --command "/doctor"
+```
+
+Check asset status:
+
+```powershell
+.\.venv\Scripts\python.exe -m chaseos --command "/assets status"
+```
+
+Create an innovation takeaway file:
+
+```powershell
+Set-Content -Path .\innovation_takeaway.txt -Value "A small visible improvement beats a hidden perfect plan."
+```
+
+Prepare daily poster and wallpaper assets without applying them:
+
+```powershell
+.\.venv\Scripts\python.exe -m chaseos --command "/prepare wallpapers --takeaway-file .\innovation_takeaway.txt"
+```
+
+Run non-mutating smoke:
+
+```powershell
+.\.venv\Scripts\python.exe -m chaseos --smoke wallpapers
+```
+
+Only after smoke passes and the mapping looks correct, the user may manually run:
+
+```powershell
+.\.venv\Scripts\python.exe -m chaseos --command "/apply wallpapers --confirm" --allow-desktop-changes
+```
+
+Rollback:
+
+```powershell
+.\.venv\Scripts\python.exe -m chaseos --command "/reset wallpapers" --allow-desktop-changes
+```
+
+Phase 12 safety notes:
+
+- `/prepare wallpapers` generates files only.
+- `/prepare wallpapers` does not apply desktop wallpapers.
+- `--smoke wallpapers` does not apply desktop wallpapers.
+- `/apply wallpapers --confirm` is the only wallpaper apply command.
+- Display 1 never uses general local photos.
+
 ## Current Limitations
 
 - No OpenAI yet.

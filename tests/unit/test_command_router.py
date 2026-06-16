@@ -4,6 +4,7 @@ from chaseos.app.command_router import KNOWN_COMMANDS, CommandRouter, route_comm
 def test_phase_two_commands_are_reserved() -> None:
     assert "/help" in KNOWN_COMMANDS
     assert "/version" in KNOWN_COMMANDS
+    assert "/doctor" in KNOWN_COMMANDS
     assert "/start" in KNOWN_COMMANDS
     assert "/clear" in KNOWN_COMMANDS
     assert "/exit" in KNOWN_COMMANDS
@@ -21,6 +22,8 @@ def test_phase_two_commands_are_reserved() -> None:
     assert "/apply" in KNOWN_COMMANDS
     assert "/wallpaper" in KNOWN_COMMANDS
     assert "/verify" in KNOWN_COMMANDS
+    assert "/assets" in KNOWN_COMMANDS
+    assert "/prepare" in KNOWN_COMMANDS
     assert "/photos" in KNOWN_COMMANDS
     assert "/index" in KNOWN_COMMANDS
     assert "/photo" in KNOWN_COMMANDS
@@ -40,6 +43,13 @@ def test_version_is_recognized() -> None:
 
     assert result.recognized is True
     assert result.command == "/version"
+
+
+def test_doctor_is_recognized() -> None:
+    result = route_command("/doctor")
+
+    assert result.recognized is True
+    assert result.command == "/doctor"
 
 
 def test_start_is_recognized() -> None:
@@ -214,6 +224,21 @@ def test_verify_wallpapers_command_is_recognized() -> None:
 
     assert result.recognized is True
     assert result.command == "/verify wallpapers"
+
+
+def test_assets_status_command_is_recognized() -> None:
+    result = route_command("/assets status")
+
+    assert result.recognized is True
+    assert result.command == "/assets status"
+
+
+def test_prepare_wallpapers_command_is_recognized() -> None:
+    result = route_command("/prepare wallpapers --takeaway useful insight")
+
+    assert result.recognized is True
+    assert result.command == "/prepare wallpapers"
+    assert result.argument == "--takeaway useful insight"
 
 
 def test_photo_status_command_is_recognized() -> None:

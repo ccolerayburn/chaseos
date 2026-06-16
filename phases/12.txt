@@ -1,0 +1,472 @@
+We are continuing the existing Windows desktop app project ChaseOS.
+
+Do not restart planning from scratch. Continue from completed Phases 1-11.
+
+Repo location:
+
+C:\_Codex\chaseos
+
+Recent commits:
+
+Phase 9:
+47271a7 Add safe per-monitor wallpaper application
+
+Phase 10:
+fd0c834 Add wallpaper diagnostics and preflight verification
+
+Phase 11:
+c5d8962 Add headless command runner and wallpaper smoke workflow
+
+Current Phase 11 verification:
+
+202 passed in 5.48s
+ruff: All checks passed!
+
+Phase 11 added:
+- --command / -c
+- --script
+- --smoke wallpapers
+- --allow-desktop-changes
+- /version
+- src/chaseos/app/headless.py
+- tests/unit/test_headless.py
+
+Current behavior:
+- python -m chaseos with no args still launches the normal tray GUI path.
+- Headless mode uses the same command router as the GUI terminal.
+- /apply wallpapers --confirm and /reset wallpapers are blocked unless --allow-desktop-changes is present.
+- --smoke wallpapers runs only:
+  - /wallpaper status
+  - /wallpaper diagnostics
+  - /verify wallpapers
+  - /apply wallpapers --dry-run
+
+Current smoke result:
+The non-mutating headless smoke ran and wrote:
+
+C:\Users\ccole\AppData\Local\ChaseOS\wallpaper_state\last_wallpaper_smoke.txt
+C:\Users\ccole\AppData\Local\ChaseOS\wallpaper_state\last_wallpaper_smoke.json
+
+Smoke result was failed, but safely and correctly:
+- no wallpaper manifest exists yet
+- comtypes is not installed or not available in the current runtime
+- no wallpaper changes were applied
+
+Real desktop apply has not been run and must not be run automatically.
+
+Important UX direction:
+- Keep the tray app and terminal-style command window.
+- Do not add a dashboard.
+- Do not add a visual theme preview.
+- Dark terminal style remains the main UI.
+- Commands remain text-based.
+
+Important privacy/safety rules:
+- No OpenAI calls.
+- No diagnosis.
+- No clinical labels.
+- Public poster must never include private check-in details.
+- Public Display 1 must never use general Lightroom/local photos.
+- Display 1 should use the approved/latest Phase 5 public poster when available.
+- Display 1 generated placeholder is fallback only.
+- Do not modify registry settings.
+- Do not restart Explorer.
+- Do not modify taskbar pins or icons.
+- Do not require admin rights.
+- Do not run /apply wallpapers --confirm automatically.
+- Do not run /reset wallpapers automatically.
+
+Known monitor layout:
+- Display 1: portrait public-facing monitor, 1080x1920, Daily Public Innovation Poster.
+- Display 4: landscape private monitor, Left Atmosphere wallpaper.
+- Display 2: landscape private monitor, Center Command wallpaper.
+- Display 3: landscape private monitor, Right Inspiration wallpaper.
+
+Local photo source:
+C:\_Media\Photos\Lightroom\Export
+
+Implement Phase 12: First-run readiness, dependency doctor, and safe daily asset preparation.
+
+Goal:
+Phase 11 gave ChaseOS a safe headless verification path. Phase 12 should make that path actionable by:
+1. diagnosing environment/setup problems clearly,
+2. reporting asset readiness clearly,
+3. generating missing daily wallpaper/poster assets without applying them,
+4. making the smoke workflow able to pass once assets and dependencies are present.
+
+Do not redesign the app.
+Do not duplicate command router behavior.
+Do not weaken Phase 9/10/11 safety gates.
+Do not apply wallpapers automatically.
+
+Phase 12 requirements:
+
+1. Verify local dependency installation
+
+Before code changes, check whether the active venv has comtypes installed:
+
+cd C:\_Codex\chaseos
+.\.venv\Scripts\python.exe -m pip show comtypes
+
+If comtypes is missing, run:
+
+.\.venv\Scripts\python.exe -m pip install -e .
+
+Then verify:
+
+.\.venv\Scripts\python.exe -c "import comtypes; print(comtypes.__version__)"
+
+Do not vendor dependencies.
+Do not commit venv files.
+If installation fails, report it clearly.
+
+2. Add /doctor command
+
+Add a terminal command:
+
+/doctor
+
+It must work in GUI command mode and headless mode:
+
+.\.venv\Scripts\python.exe -m chaseos --command "/doctor"
+
+Output should include:
+- App name.
+- App/package version if available.
+- Python version.
+- Platform.
+- Whether running on Windows.
+- Whether PySide6 is importable.
+- Whether Pillow is importable.
+- Whether comtypes is importable on Windows.
+- Whether Windows per-monitor wallpaper API appears available.
+- App data root path.
+- Whether key ChaseOS directories exist and are writable:
+  - config
+  - posters
+  - generated
+  - wallpaper_state
+- Whether monitor_mapping.json exists.
+- Whether latest public poster exists.
+- Whether latest generated wallpaper manifest exists.
+- Whether rollback state exists.
+- Whether last wallpaper diagnostics report exists.
+- Whether last wallpaper smoke report exists.
+- No wallpaper changes applied.
+
+Use clear PASS/WARN/FAIL style lines.
+
+Suggested output:
+
+CHASEOS // DOCTOR
+
+Environment
+  Python: 3.x.x
+  Platform: Windows
+  PySide6: PASS
+  Pillow: PASS
+  comtypes: PASS
+
+Runtime paths
+  App data: C:\Users\ccole\AppData\Local\ChaseOS
+  Config: PASS
+  Posters: PASS
+  Generated: PASS
+  Wallpaper state: PASS
+
+Wallpaper readiness
+  Monitor mapping: PASS
+  Public poster: WARN missing
+  Generated manifest: WARN missing
+  Windows wallpaper API: PASS
+
+No changes applied.
+
+Exit behavior:
+- Return success if there are only warnings.
+- Return non-zero if a core requirement fails.
+- Treat missing generated assets as WARN, not FAIL.
+- Treat missing comtypes on Windows as FAIL for wallpaper application readiness, but do not crash.
+
+3. Add /assets status command
+
+Add a terminal command:
+
+/assets status
+
+It must work in GUI and headless mode:
+
+.\.venv\Scripts\python.exe -m chaseos --command "/assets status"
+
+Output should include:
+- Latest public poster path, if present.
+- Latest public poster dimensions, if readable.
+- Latest generated wallpaper manifest path, if present.
+- Generated date.
+- Paths and dimensions for:
+  - Display 1 public poster or placeholder fallback
+  - Display 4 left atmosphere
+  - Display 2 center command
+  - Display 3 right inspiration
+- Whether each image exists.
+- Whether each image is readable.
+- Whether Display 1 is safely public-only.
+- Whether any Display 1 candidate path appears to come from Lightroom/general photos.
+- No wallpaper changes applied.
+
+If no manifest exists, output should clearly say:
+
+No generated wallpaper manifest found.
+Run /prepare wallpapers --takeaway-file <path> to create a safe daily asset set without applying wallpapers.
+
+4. Add safe daily asset preparation command
+
+Add terminal commands:
+
+/prepare wallpapers --takeaway-file <path>
+/prepare wallpapers --takeaway <text>
+
+This command must:
+- Generate or regenerate today's public poster and private wallpapers.
+- Save the usual poster and wallpaper manifest files using existing project output paths.
+- Not apply wallpapers.
+- Not require OpenAI.
+- Not use clinical labels.
+- Not use private check-in details as public poster content.
+- Use only the explicit innovation takeaway text for the public poster.
+- Never use general Lightroom/local photos on Display 1.
+- Preserve existing private photo rules:
+  - Display 4 may use private local photo hybrid rendering.
+  - Display 3 may use private local photo hybrid rendering.
+  - Display 2 remains generated/minimal by default.
+  - Display 1 remains public poster only.
+
+Preferred behavior:
+- Reuse the existing Phase 5 poster engine.
+- Reuse the existing Phase 6/7 wallpaper generation engine.
+- Reuse existing safety/redaction utilities.
+- Reuse existing manifest writer if available.
+- Avoid creating a parallel rendering system.
+
+If a prior approved/latest theme plan exists, use it.
+
+If no prior theme plan exists, use a safe deterministic fallback theme:
+- cyberpunk/minimal
+- dark graphite base
+- muted amber signal text
+- low visual noise
+- calm focus
+- no personal/private check-in details
+
+The command must explicitly report whether it used:
+- latest approved/current theme plan
+- fallback baseline theme
+
+Argument behavior:
+- Accept either --takeaway-file <path> or --takeaway <text>.
+- If both are provided, prefer --takeaway-file and warn.
+- If neither is provided, fail clearly and generate nothing.
+
+Failure output should be similar to:
+
+CHASEOS // PREPARE WALLPAPERS FAILED
+
+Innovation takeaway is required for the public poster.
+Use /prepare wallpapers --takeaway-file <path>
+or /prepare wallpapers --takeaway <text>
+
+No wallpaper assets generated.
+No desktop wallpaper changes applied.
+
+Successful output should clearly say:
+
+Wallpapers were generated only.
+No desktop wallpaper changes applied.
+
+5. Add headless-friendly preparation workflow
+
+The following must work:
+
+.\.venv\Scripts\python.exe -m chaseos --command "/doctor"
+.\.venv\Scripts\python.exe -m chaseos --command "/assets status"
+.\.venv\Scripts\python.exe -m chaseos --command "/prepare wallpapers --takeaway-file .\innovation_takeaway.txt"
+.\.venv\Scripts\python.exe -m chaseos --command "/assets status"
+.\.venv\Scripts\python.exe -m chaseos --smoke wallpapers
+
+Do not require GUI for this workflow.
+
+6. Improve /wallpaper status if needed
+
+If /wallpaper status does not already reference missing asset remediation, add a short line when assets are missing:
+
+Generated wallpaper manifest missing.
+Run /assets status for details.
+
+Do not bloat /wallpaper status.
+
+7. Do not change smoke command list
+
+Keep --smoke wallpapers running exactly:
+- /wallpaper status
+- /wallpaper diagnostics
+- /verify wallpapers
+- /apply wallpapers --dry-run
+
+Do not add /prepare wallpapers to --smoke wallpapers.
+Smoke must verify readiness, not create assets.
+
+8. Add optional helper smoke script
+
+Create this file if the project does not already have a scripts/examples area:
+
+examples/wallpaper_smoke.txt
+
+Contents:
+
+# ChaseOS non-mutating wallpaper smoke
+/wallpaper status
+/wallpaper diagnostics
+/verify wallpapers
+/apply wallpapers --dry-run
+
+Do not include mutating commands in the example script.
+
+9. Update README
+
+Add a Phase 12 section titled:
+
+First-run readiness
+
+Document:
+
+Dependency refresh:
+
+.\.venv\Scripts\python.exe -m pip install -e .
+
+Doctor:
+
+.\.venv\Scripts\python.exe -m chaseos --command "/doctor"
+
+Asset status:
+
+.\.venv\Scripts\python.exe -m chaseos --command "/assets status"
+
+Create an innovation takeaway file:
+
+Set-Content -Path .\innovation_takeaway.txt -Value "A small visible improvement beats a hidden perfect plan."
+
+Prepare wallpapers without applying them:
+
+.\.venv\Scripts\python.exe -m chaseos --command "/prepare wallpapers --takeaway-file .\innovation_takeaway.txt"
+
+Run non-mutating smoke:
+
+.\.venv\Scripts\python.exe -m chaseos --smoke wallpapers
+
+Only after smoke passes and the mapping looks correct, the user may manually run:
+
+.\.venv\Scripts\python.exe -m chaseos --command "/apply wallpapers --confirm" --allow-desktop-changes
+
+Rollback:
+
+.\.venv\Scripts\python.exe -m chaseos --command "/reset wallpapers" --allow-desktop-changes
+
+Document again:
+- /prepare wallpapers generates files only.
+- /prepare wallpapers does not apply desktop wallpapers.
+- --smoke wallpapers does not apply desktop wallpapers.
+- /apply wallpapers --confirm is the only wallpaper apply command.
+- Display 1 never uses general local photos.
+
+10. Update AGENTS.md
+
+Add Phase 12 guardrails:
+- /doctor must never mutate desktop state.
+- /assets status must never mutate desktop state.
+- /prepare wallpapers may write generated assets and manifests but must never apply wallpapers.
+- /prepare wallpapers requires an explicit innovation takeaway for the public poster.
+- Public poster content must come only from the innovation takeaway.
+- Public Display 1 must never use Lightroom/general photos.
+- Do not weaken Phase 9/10/11 wallpaper safety gates.
+- Do not modify registry settings.
+- Do not restart Explorer.
+- Do not require admin.
+- Do not call OpenAI.
+
+11. Tests
+
+Add unit tests. Do not touch real Windows wallpapers.
+
+Minimum tests:
+- /doctor reports app/runtime information.
+- /doctor reports missing comtypes gracefully.
+- /doctor treats missing assets as warning, not crash.
+- /assets status reports missing manifest clearly.
+- /assets status reports existing manifest and image dimensions.
+- /assets status warns if Display 1 candidate appears to come from Lightroom/general photos.
+- /prepare wallpapers fails when no takeaway is provided.
+- /prepare wallpapers accepts --takeaway text.
+- /prepare wallpapers accepts --takeaway-file path.
+- /prepare wallpapers prefers --takeaway-file when both file and text are provided.
+- /prepare wallpapers writes public poster.
+- /prepare wallpapers writes private wallpapers.
+- /prepare wallpapers writes or updates wallpaper manifest.
+- /prepare wallpapers does not call wallpaper applier.
+- /prepare wallpapers never uses a Lightroom/general photo for Display 1.
+- /prepare wallpapers can use fallback baseline theme when no approved theme exists.
+- Headless --command can run /doctor.
+- Headless --command can run /assets status.
+- Headless --command can run /prepare wallpapers --takeaway-file <path>.
+- Existing Phase 9, Phase 10, and Phase 11 tests still pass.
+
+12. Verification
+
+Run:
+
+cd C:\_Codex\chaseos
+.\.venv\Scripts\python.exe -m pip install -e .
+.\.venv\Scripts\python.exe -m pytest
+.\.venv\Scripts\python.exe -m ruff check .
+
+Then run this non-mutating headless readiness workflow:
+
+Set-Content -Path .\innovation_takeaway.txt -Value "A small visible improvement beats a hidden perfect plan."
+
+.\.venv\Scripts\python.exe -m chaseos --command "/doctor"
+.\.venv\Scripts\python.exe -m chaseos --command "/assets status"
+.\.venv\Scripts\python.exe -m chaseos --command "/prepare wallpapers --takeaway-file .\innovation_takeaway.txt"
+.\.venv\Scripts\python.exe -m chaseos --command "/assets status"
+.\.venv\Scripts\python.exe -m chaseos --smoke wallpapers
+
+Do not run:
+
+.\.venv\Scripts\python.exe -m chaseos --command "/apply wallpapers --confirm" --allow-desktop-changes
+
+Do not run:
+
+.\.venv\Scripts\python.exe -m chaseos --command "/reset wallpapers" --allow-desktop-changes
+
+Those real desktop-changing commands are for later user-approved manual testing only.
+
+13. Commit
+
+After implementation and passing checks:
+
+git add .
+git commit -m "Add first-run readiness and asset preparation"
+
+Report:
+- Files changed.
+- Commands added.
+- Any changes to existing command behavior.
+- Whether comtypes is now available in the active venv.
+- Test result.
+- Ruff result.
+- Output summary from:
+  - /doctor
+  - /assets status before prepare
+  - /prepare wallpapers
+  - /assets status after prepare
+  - --smoke wallpapers
+- Paths to generated poster, generated wallpapers, and wallpaper manifest.
+- Whether real desktop apply still needs a user-approved manual run.

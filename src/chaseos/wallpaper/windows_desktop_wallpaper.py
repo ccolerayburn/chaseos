@@ -52,15 +52,16 @@ class WindowsDesktopWallpaper:
             ) from exc
         try:
             self._desktop_wallpaper = comtypes.client.CreateObject(
-                self._CLSID_DESKTOP_WALLPAPER
+                self._CLSID_DESKTOP_WALLPAPER,
+                interface=_desktop_wallpaper_interface(),
             )
         except Exception as exc:  # pragma: no cover - depends on Windows COM.
             raise DesktopWallpaperError(f"failed to initialize IDesktopWallpaper: {exc}") from exc
 
     def list_monitors(self) -> tuple[str, ...]:
-        count = int(self._desktop_wallpaper.GetMonitorDevicePathCount())
+        count = int(_out_value(self._desktop_wallpaper.GetMonitorDevicePathCount()))
         return tuple(
-            str(self._desktop_wallpaper.GetMonitorDevicePathAt(index))
+            str(_out_value(self._desktop_wallpaper.GetMonitorDevicePathAt(index)))
             for index in range(count)
         )
 
@@ -69,7 +70,7 @@ class WindowsDesktopWallpaper:
         for index, monitor_id in enumerate(self.list_monitors()):
             left = top = right = bottom = None
             try:
-                rect = self._desktop_wallpaper.GetMonitorRECT(monitor_id)
+                rect = _out_value(self._desktop_wallpaper.GetMonitorRECT(monitor_id))
                 left = int(rect.left)
                 top = int(rect.top)
                 right = int(rect.right)
@@ -90,8 +91,111 @@ class WindowsDesktopWallpaper:
         return tuple(monitors)
 
     def get_wallpaper(self, monitor_id: str) -> str | None:
-        wallpaper = self._desktop_wallpaper.GetWallpaper(monitor_id)
+        wallpaper = _out_value(self._desktop_wallpaper.GetWallpaper(monitor_id))
         return str(wallpaper) if wallpaper else None
 
     def set_wallpaper(self, monitor_id: str, image_path: str) -> None:
         self._desktop_wallpaper.SetWallpaper(monitor_id, image_path)
+
+
+def _out_value(value):
+    if isinstance(value, tuple) and len(value) == 1:
+        return value[0]
+    return value
+
+
+def _desktop_wallpaper_interface():
+    from ctypes import POINTER, Structure, c_int, c_uint, c_ulong, c_wchar_p
+
+    from comtypes import COMMETHOD, GUID, HRESULT, IUnknown
+
+    lpwstr = c_wchar_p
+
+    class _Rect(Structure):
+        _fields_ = (
+            ("left", c_int),
+            ("top", c_int),
+            ("right", c_int),
+            ("bottom", c_int),
+        )
+
+    class _IDesktopWallpaper(IUnknown):
+        _case_insensitive_ = True
+        _iid_ = GUID("{B92B56A9-8B55-4E14-9A89-0199BBB6F93B}")
+        _methods_ = (
+            COMMETHOD(
+                [],
+                HRESULT,
+                "SetWallpaper",
+                (["in"], lpwstr, "monitorID"),
+                (["in"], lpwstr, "wallpaper"),
+            ),
+            COMMETHOD(
+                [],
+                HRESULT,
+                "GetWallpaper",
+                (["in"], lpwstr, "monitorID"),
+                (["out"], POINTER(lpwstr), "wallpaper"),
+            ),
+            COMMETHOD(
+                [],
+                HRESULT,
+                "GetMonitorDevicePathAt",
+                (["in"], c_uint, "monitorIndex"),
+                (["out"], POINTER(lpwstr), "monitorID"),
+            ),
+            COMMETHOD(
+                [],
+                HRESULT,
+                "GetMonitorDevicePathCount",
+                (["out"], POINTER(c_uint), "count"),
+            ),
+            COMMETHOD(
+                [],
+                HRESULT,
+                "GetMonitorRECT",
+                (["in"], lpwstr, "monitorID"),
+                (["out"], POINTER(_Rect), "displayRect"),
+            ),
+            COMMETHOD([], HRESULT, "SetBackgroundColor", (["in"], c_ulong, "color")),
+            COMMETHOD([], HRESULT, "GetBackgroundColor", (["out"], POINTER(c_ulong), "color")),
+            COMMETHOD([], HRESULT, "SetPosition", (["in"], c_int, "position")),
+            COMMETHOD([], HRESULT, "GetPosition", (["out"], POINTER(c_int), "position")),
+            COMMETHOD(
+                [],
+                HRESULT,
+                "SetSlideshow",
+                (["in"], POINTER(IUnknown), "items"),
+            ),
+            COMMETHOD(
+                [],
+                HRESULT,
+                "GetSlideshow",
+                (["out"], POINTER(POINTER(IUnknown)), "items"),
+            ),
+            COMMETHOD(
+                [],
+                HRESULT,
+                "SetSlideshowOptions",
+                (["in"], c_int, "options"),
+                (["in"], c_uint, "slideshowTick"),
+            ),
+            COMMETHOD(
+                [],
+                HRESULT,
+                "GetSlideshowOptions",
+                (["out"], POINTER(c_int), "options"),
+                (["out"], POINTER(c_uint), "slideshowTick"),
+            ),
+            COMMETHOD(
+                [],
+                HRESULT,
+                "AdvanceSlideshow",
+                (["in"], lpwstr, "monitorID"),
+                (["in"], c_int, "direction"),
+            ),
+            COMMETHOD([], HRESULT, "GetStatus", (["out"], POINTER(c_int), "state")),
+            COMMETHOD([], HRESULT, "Enable", (["in"], c_int, "enable")),
+        )
+
+    return _IDesktopWallpaper

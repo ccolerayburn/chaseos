@@ -43,12 +43,15 @@ class CommandResult:
 KNOWN_COMMANDS = (
     "/help",
     "/version",
+    "/doctor",
     "/start",
     "/clear",
     "/exit",
     "/reset",
     "/apply",
     "/wallpaper",
+    "/assets",
+    "/prepare",
     "/verify",
     "/theme",
     "/poster",
@@ -74,6 +77,9 @@ KNOWN_COMMANDS = (
 HELP_LINES = (
     TerminalLine("chaseos", "available commands:"),
     TerminalLine("chaseos", "/version - print ChaseOS version and platform details"),
+    TerminalLine("chaseos", "/doctor - check ChaseOS runtime readiness"),
+    TerminalLine("chaseos", "/assets status - print generated asset readiness"),
+    TerminalLine("chaseos", "/prepare wallpapers --takeaway-file <path> - generate assets only"),
     TerminalLine("chaseos", "/start - begin the 15-minute text ritual"),
     TerminalLine("chaseos", "/theme - print the current placeholder theme plan"),
     TerminalLine("chaseos", "/poster - print the current placeholder poster plan"),
@@ -131,6 +137,12 @@ class CommandRouter:
                 action="respond",
                 command=command,
                 lines=(TerminalLine("chaseos", "version command recognized."),),
+            )
+        if command == "/doctor":
+            return CommandResult(
+                action="respond",
+                command=command,
+                lines=(TerminalLine("chaseos", "doctor command recognized."),),
             )
         if command == "/start":
             return CommandResult(
@@ -276,6 +288,20 @@ class CommandRouter:
                 command=f"/wallpaper {argument}",
                 argument=argument,
                 lines=(TerminalLine("chaseos", f"wallpaper {argument} command recognized."),),
+            )
+        if command == "/assets" and argument == "status":
+            return CommandResult(
+                action="respond",
+                command="/assets status",
+                argument=argument,
+                lines=(TerminalLine("chaseos", "assets status command recognized."),),
+            )
+        if command == "/prepare" and argument.startswith("wallpapers"):
+            return CommandResult(
+                action="respond",
+                command="/prepare wallpapers",
+                argument=argument.removeprefix("wallpapers").strip(),
+                lines=(TerminalLine("chaseos", "prepare wallpapers command recognized."),),
             )
         if command == "/verify" and argument == "wallpapers":
             return CommandResult(
