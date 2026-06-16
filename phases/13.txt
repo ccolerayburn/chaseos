@@ -1,0 +1,306 @@
+We are continuing the existing Windows desktop app project ChaseOS.
+
+Do not restart planning from scratch. Continue from completed Phases 1-12.
+
+Repo location:
+
+C:\_Codex\chaseos
+
+Recent commits:
+
+Phase 9:
+47271a7 Add safe per-monitor wallpaper application
+
+Phase 10:
+fd0c834 Add wallpaper diagnostics and preflight verification
+
+Phase 11:
+c5d8962 Add headless command runner and wallpaper smoke workflow
+
+Phase 12:
+07f6cd9 Add first-run readiness and asset preparation
+
+Current Phase 12 verification:
+
+comtypes: 1.4.16
+pytest: 222 passed in 109.59s
+ruff: All checks passed!
+
+Phase 12 added:
+- /doctor
+- /assets status
+- /prepare wallpapers --takeaway-file <path>
+- /prepare wallpapers --takeaway <text>
+- src/chaseos/app/readiness.py
+- tests/unit/test_readiness.py
+- examples/wallpaper_smoke.txt
+- phases/12.txt
+
+Current readiness workflow result:
+- /doctor passed core dependency checks.
+- comtypes is available.
+- Windows wallpaper API reports PASS.
+- /assets status before prepare found no manifest.
+- /prepare wallpapers generated assets only and applied no desktop changes.
+- /assets status after prepare found all expected images and all were readable.
+- --smoke wallpapers passed.
+- All four monitors resolved by rectangle.
+- No wallpaper changes were applied yet.
+
+Generated asset paths:
+
+C:\Users\ccole\AppData\Local\ChaseOS\posters\2026-06-16\display_1_public_signal.png
+C:\Users\ccole\AppData\Local\ChaseOS\generated\2026-06-16\display_4_left_atmosphere.png
+C:\Users\ccole\AppData\Local\ChaseOS\generated\2026-06-16\display_2_center_command.png
+C:\Users\ccole\AppData\Local\ChaseOS\generated\2026-06-16\display_3_right_inspiration.png
+C:\Users\ccole\AppData\Local\ChaseOS\generated\2026-06-16\wallpaper_manifest.json
+
+One local untracked file remains from smoke workflow:
+
+innovation_takeaway.txt
+
+Important UX direction:
+- Keep the tray app and terminal-style command window.
+- Do not add a dashboard.
+- Do not add a visual theme preview.
+- Dark terminal style remains the main UI.
+- Commands remain text-based.
+
+Important privacy/safety rules:
+- No OpenAI calls.
+- No diagnosis.
+- No clinical labels.
+- Public poster must never include private check-in details.
+- Public Display 1 must never use general Lightroom/local photos.
+- Display 1 should use the approved/latest Phase 5 public poster when available.
+- Display 1 generated placeholder is fallback only.
+- Do not modify registry settings.
+- Do not restart Explorer.
+- Do not modify taskbar pins or icons.
+- Do not require admin rights.
+
+Known monitor layout:
+- Display 1: portrait public-facing monitor, 1080x1920, Daily Public Innovation Poster.
+- Display 4: landscape private monitor, Left Atmosphere wallpaper.
+- Display 2: landscape private monitor, Center Command wallpaper.
+- Display 3: landscape private monitor, Right Inspiration wallpaper.
+
+Local photo source:
+C:\_Media\Photos\Lightroom\Export
+
+Implement Phase 13: Controlled live wallpaper apply acceptance test.
+
+This phase is explicitly authorized to run the real wallpaper apply command once:
+
+.\.venv\Scripts\python.exe -m chaseos --command "/apply wallpapers --confirm" --allow-desktop-changes
+
+This command changes desktop wallpapers. Do not run it until after the preflight steps below pass.
+
+Do not run /reset wallpapers automatically unless:
+- the apply command fails after partial application,
+- post-apply verification shows the wrong wallpaper path on any monitor,
+- or an obvious safety/privacy violation is detected.
+
+Do not make unnecessary code changes.
+This phase is primarily an operational acceptance test.
+Only patch code if the live apply exposes a bug.
+
+Phase 13 goals:
+1. Clean local smoke artifact.
+2. Re-run non-mutating preflight.
+3. Run one controlled live apply.
+4. Verify applied wallpaper state through ChaseOS diagnostics and Windows wallpaper API.
+5. Confirm rollback state and apply manifest were written.
+6. Report results clearly.
+7. Commit only documentation/test/code changes if any were required.
+
+Step 1: Check git state and clean local smoke artifact
+
+Run:
+
+cd C:\_Codex\chaseos
+git status --short
+
+If the only untracked file is:
+
+innovation_takeaway.txt
+
+delete it:
+
+Remove-Item .\innovation_takeaway.txt
+
+Then check:
+
+git status --short
+
+Do not commit innovation_takeaway.txt.
+
+If recurring local takeaway files are becoming annoying, it is acceptable to add this root-level ignore rule to .gitignore:
+
+/innovation_takeaway.txt
+
+Only do that if .gitignore already exists or if creating it is consistent with the repo style. If you change .gitignore, commit it later.
+
+Step 2: Run current verification
+
+Run:
+
+.\.venv\Scripts\python.exe -m pytest
+.\.venv\Scripts\python.exe -m ruff check .
+
+Both must pass before live apply.
+
+Step 3: Run non-mutating preflight
+
+Run:
+
+.\.venv\Scripts\python.exe -m chaseos --command "/doctor"
+.\.venv\Scripts\python.exe -m chaseos --command "/assets status"
+.\.venv\Scripts\python.exe -m chaseos --command "/wallpaper status"
+.\.venv\Scripts\python.exe -m chaseos --command "/wallpaper diagnostics"
+.\.venv\Scripts\python.exe -m chaseos --command "/verify wallpapers"
+.\.venv\Scripts\python.exe -m chaseos --command "/apply wallpapers --dry-run"
+
+Requirements before live apply:
+- /doctor must show core dependency readiness.
+- comtypes must be available.
+- Windows wallpaper API must be available.
+- /assets status must show all expected images exist and are readable.
+- /verify wallpapers must pass.
+- /apply wallpapers --dry-run must resolve all four roles to real monitor IDs.
+- No Display 1 candidate may come from Lightroom/general photos.
+- No unresolved monitor IDs.
+- No duplicate monitor IDs.
+
+If any of these fail, stop. Do not run the live apply. Patch the underlying issue only if it is clearly a ChaseOS bug.
+
+Step 4: Run the controlled live apply
+
+Only after Step 3 passes, run:
+
+.\.venv\Scripts\python.exe -m chaseos --command "/apply wallpapers --confirm" --allow-desktop-changes
+
+Expected behavior:
+- Rollback state is saved before any wallpaper is set.
+- All four wallpapers are applied per monitor.
+- No registry settings are modified.
+- Explorer is not restarted.
+- Admin rights are not required.
+- Taskbar pins/icons are untouched.
+- Public Display 1 receives the public poster only.
+- Display 4 receives left atmosphere.
+- Display 2 receives center command.
+- Display 3 receives right inspiration.
+
+Step 5: Verify post-apply state
+
+Run:
+
+.\.venv\Scripts\python.exe -m chaseos --command "/wallpaper diagnostics"
+.\.venv\Scripts\python.exe -m chaseos --command "/wallpaper status"
+.\.venv\Scripts\python.exe -m chaseos --command "/verify wallpapers"
+.\.venv\Scripts\python.exe -m chaseos --command "/apply wallpapers --dry-run"
+
+Also inspect these files:
+
+C:\Users\ccole\AppData\Local\ChaseOS\wallpaper_state\previous_wallpapers.json
+C:\Users\ccole\AppData\Local\ChaseOS\wallpaper_state\last_apply_manifest.json
+C:\Users\ccole\AppData\Local\ChaseOS\wallpaper_state\last_wallpaper_diagnostics.json
+
+Verify:
+- previous_wallpapers.json exists.
+- previous_wallpapers.json has four entries if Windows reported four current wallpapers before apply.
+- last_apply_manifest.json exists.
+- last_apply_manifest.json records all four applied roles.
+- Diagnostics show current wallpaper paths matching the expected ChaseOS image paths.
+- Public role path is:
+  C:\Users\ccole\AppData\Local\ChaseOS\posters\2026-06-16\display_1_public_signal.png
+- Left role path is:
+  C:\Users\ccole\AppData\Local\ChaseOS\generated\2026-06-16\display_4_left_atmosphere.png
+- Center role path is:
+  C:\Users\ccole\AppData\Local\ChaseOS\generated\2026-06-16\display_2_center_command.png
+- Right role path is:
+  C:\Users\ccole\AppData\Local\ChaseOS\generated\2026-06-16\display_3_right_inspiration.png
+
+Step 6: Emergency rollback condition
+
+Do not run rollback automatically after a successful apply.
+
+Only run rollback if:
+- the apply command partially fails,
+- diagnostics show an incorrect monitor/image assignment,
+- Display 1 is assigned anything other than the public poster,
+- a Lightroom/general photo path appears on Display 1,
+- or there is another clear safety/privacy issue.
+
+Rollback command:
+
+.\.venv\Scripts\python.exe -m chaseos --command "/reset wallpapers" --allow-desktop-changes
+
+After rollback, run:
+
+.\.venv\Scripts\python.exe -m chaseos --command "/wallpaper diagnostics"
+.\.venv\Scripts\python.exe -m chaseos --command "/wallpaper status"
+
+Step 7: Optional manual GUI smoke
+
+If live apply succeeds, optionally launch the normal GUI:
+
+.\.venv\Scripts\python.exe -m chaseos
+
+In the terminal UI, manually run:
+
+/wallpaper status
+/assets status
+/apply wallpapers --dry-run
+
+Do not run /reset wallpapers from the GUI unless rollback is needed.
+
+Step 8: Documentation updates only if needed
+
+If the live apply reveals any important operator notes, update README with a short “Live apply acceptance” note.
+
+Examples:
+- Monitor mapping resolved by rectangle on this workstation.
+- Real apply verified on Windows using IDesktopWallpaper.
+- Rollback state path.
+- Apply manifest path.
+
+Do not add private machine-specific details beyond paths already documented in this project.
+
+Step 9: Tests after any code/documentation change
+
+If any files were changed, run:
+
+.\.venv\Scripts\python.exe -m pytest
+.\.venv\Scripts\python.exe -m ruff check .
+
+Step 10: Commit only if files changed
+
+If no files changed, do not create an empty commit.
+
+If documentation or code changed, commit:
+
+git add .
+git commit -m "Verify live wallpaper apply workflow"
+
+Step 11: Report
+
+Report:
+- Initial git status.
+- Whether innovation_takeaway.txt was removed or ignored.
+- Test result before live apply.
+- Ruff result before live apply.
+- Summary from /doctor.
+- Summary from /assets status.
+- Summary from /verify wallpapers.
+- Summary from /apply wallpapers --dry-run.
+- Whether /apply wallpapers --confirm was run.
+- Whether all four wallpapers applied successfully.
+- Whether Display 1 received only the public poster.
+- Whether rollback state was saved.
+- Path to previous_wallpapers.json.
+- Path to last_apply_manifest.json.
+- Whether rollback was needed or not.
+- Whether any code/docs changed.
+- Commit hash if a commit was created.
