@@ -46,6 +46,7 @@ KNOWN_COMMANDS = (
     "/doctor",
     "/start",
     "/daily",
+    "/export",
     "/resume",
     "/clear",
     "/exit",
@@ -76,39 +77,116 @@ KNOWN_COMMANDS = (
 )
 
 
-HELP_LINES = (
-    TerminalLine("chaseos", "available commands:"),
-    TerminalLine("chaseos", "/version - print ChaseOS version and platform details"),
-    TerminalLine("chaseos", "/doctor - check ChaseOS runtime readiness"),
-    TerminalLine("chaseos", "/assets status - print generated asset readiness"),
-    TerminalLine("chaseos", "/daily status - print today's startup ritual state"),
-    TerminalLine("chaseos", "/resume - resume today's startup ritual state"),
-    TerminalLine("chaseos", "/prepare wallpapers --takeaway-file <path> - generate assets only"),
-    TerminalLine("chaseos", "/start - begin the 15-minute text ritual"),
-    TerminalLine("chaseos", "/theme - print the current placeholder theme plan"),
-    TerminalLine("chaseos", "/poster - print the current placeholder poster plan"),
-    TerminalLine("chaseos", "/approve - approve the current ritual step"),
-    TerminalLine("chaseos", "/change <text> - request a theme or poster adjustment"),
-    TerminalLine("chaseos", "/regenerate - regenerate the active placeholder plan"),
-    TerminalLine("chaseos", "/wallpapers - print generated private wallpaper paths"),
-    TerminalLine("chaseos", "/generate wallpapers - generate private wallpapers if a theme exists"),
-    TerminalLine("chaseos", "/apply wallpapers --dry-run - preview per-monitor wallpaper changes"),
-    TerminalLine("chaseos", "/apply wallpapers --confirm - apply wallpapers to Windows"),
-    TerminalLine("chaseos", "/wallpaper status - report apply readiness without changes"),
-    TerminalLine("chaseos", "/wallpaper diagnostics - write monitor mapping diagnostics"),
-    TerminalLine("chaseos", "/verify wallpapers - strict no-change wallpaper preflight"),
-    TerminalLine("chaseos", "/reset wallpapers - restore previous per-monitor wallpapers"),
-    TerminalLine("chaseos", "/photos - print local photo index status"),
-    TerminalLine("chaseos", "/index photos - index the private Lightroom export folder"),
-    TerminalLine("chaseos", "/photo source - print the configured local photo source"),
-    TerminalLine("chaseos", "/monitors - detect monitors and print ChaseOS roles"),
-    TerminalLine("chaseos", "/detect monitors - force fresh monitor detection"),
-    TerminalLine("chaseos", "/monitor roles - print saved monitor role mapping"),
-    TerminalLine("chaseos", "/assign display 1 public - assign a display to a role"),
-    TerminalLine("chaseos", "/auto assign monitors - auto-map the ChaseOS monitor layout"),
-    TerminalLine("chaseos", "/save monitors, /reset monitors"),
-    TerminalLine("chaseos", "/status, /skip, /reset, /clear, /exit"),
-)
+HELP_TOPICS: dict[str, tuple[str, ...]] = {
+    "": (
+        "CHASEOS // HELP",
+        "",
+        "Startup ritual",
+        "  /start - begin the daily text ritual",
+        "  /daily status - show today's session without raw check-in text",
+        "  /daily summary - write/show a redacted operational summary",
+        "  /resume - resume today's ritual",
+        "",
+        "Theme and approval",
+        "  /approve, /skip - advance the active ritual step",
+        "  /change <text> - request a theme or poster adjustment",
+        "  /regenerate - regenerate the active plan",
+        "  /theme, /poster, /wallpapers - show current plans or paths",
+        "",
+        "Daily assets",
+        "  /assets status - check generated asset readiness",
+        "  /prepare wallpapers --takeaway-file <path> - generate assets only",
+        "  /generate wallpapers - generate private wallpapers after a theme exists",
+        "",
+        "Wallpaper verification and apply",
+        "  /wallpaper status, /wallpaper diagnostics, /verify wallpapers",
+        "  /apply wallpapers --dry-run - preview only",
+        "  /apply wallpapers --confirm - explicit live apply command",
+        "  /reset wallpapers - restore rollback state",
+        "",
+        "Monitor mapping",
+        "  /monitors, /detect monitors, /monitor roles",
+        "  /assign display 1 public, /auto assign monitors, /save monitors",
+        "",
+        "Photos",
+        "  /photos, /index photos, /photo source",
+        "",
+        "Readiness and diagnostics",
+        "  /doctor, /status, /version",
+        "  /export support --dry-run, /export support --redacted",
+        "",
+        "Headless usage",
+        "  python -m chaseos --command \"/daily status\"",
+        "  python -m chaseos --smoke startup",
+        "",
+        "Safety notes",
+        "  Display 1 never uses general Lightroom/local photos.",
+        "  Raw check-in text is not persisted by default.",
+        "  Help, status, diagnostics, smoke, export, verify, and dry-run do not apply.",
+    ),
+    "startup": (
+        "CHASEOS // HELP STARTUP",
+        "/start begins the daily ritual.",
+        "/daily status shows today's session without raw check-in text.",
+        "/daily summary writes a redacted operational summary.",
+        "/resume resumes today's ritual where practical.",
+        "/approve advances the active step; it is not a hidden wallpaper apply.",
+    ),
+    "wallpapers": (
+        "CHASEOS // HELP WALLPAPERS",
+        "/prepare wallpapers generates assets only.",
+        "/verify wallpapers runs strict preflight and changes nothing.",
+        "/apply wallpapers --dry-run previews per-monitor changes only.",
+        "/apply wallpapers --confirm is the explicit live apply command.",
+        "Headless live apply also requires --allow-desktop-changes.",
+        "/reset wallpapers restores rollback state and changes desktop state.",
+    ),
+    "monitors": (
+        "CHASEOS // HELP MONITORS",
+        "/monitors detects monitors and prints ChaseOS roles.",
+        "/detect monitors forces fresh detection.",
+        "/monitor roles prints saved role mapping.",
+        "/assign display 1 public assigns a display to a role.",
+        "/auto assign monitors maps the known ChaseOS layout.",
+        "/save monitors persists the current mapping.",
+    ),
+    "photos": (
+        "CHASEOS // HELP PHOTOS",
+        "/photos prints local photo source and index status.",
+        "/index photos indexes the private Lightroom export folder locally.",
+        "/photo source prints the configured source.",
+        "Display 1 never uses general Lightroom/local photos.",
+    ),
+    "headless": (
+        "CHASEOS // HELP HEADLESS",
+        "python -m chaseos --command \"/help wallpapers\"",
+        "python -m chaseos --command \"/daily summary\"",
+        "python -m chaseos --command \"/export support --dry-run\"",
+        "python -m chaseos --smoke startup",
+        "Live apply requires --allow-desktop-changes and explicit confirm.",
+    ),
+    "safety": (
+        "CHASEOS // HELP SAFETY",
+        "Raw check-in text is not persisted by default.",
+        "Daily status and summary use practical non-clinical signals only.",
+        "Display 1 never uses general Lightroom/local photos.",
+        "/prepare, /verify, /apply --dry-run, smoke, help, status, and export do not apply.",
+        "/apply wallpapers --confirm is the explicit live apply command.",
+        "No OpenAI calls, admin rights, registry edits, or Explorer restarts.",
+    ),
+}
+
+
+def help_lines(topic: str = "") -> tuple[TerminalLine, ...]:
+    normalized = topic.strip().lower()
+    lines = HELP_TOPICS.get(normalized)
+    if lines is None:
+        lines = (
+            "CHASEOS // HELP",
+            f"unknown help topic: {topic}",
+            "topics: startup, wallpapers, monitors, photos, headless, safety",
+        )
+    return tuple(TerminalLine("chaseos", line) for line in lines)
 
 
 MONITOR_LINES = (
@@ -135,7 +213,12 @@ class CommandRouter:
         argument = argument.strip()
 
         if command == "/help":
-            return CommandResult(action="respond", command=command, lines=HELP_LINES)
+            return CommandResult(
+                action="respond",
+                command=command,
+                argument=argument,
+                lines=help_lines(argument),
+            )
         if command == "/version":
             return CommandResult(
                 action="respond",
@@ -154,12 +237,12 @@ class CommandRouter:
                 command=command,
                 lines=(TerminalLine("chaseos", "start sequence command recognized."),),
             )
-        if command == "/daily" and argument == "status":
+        if command == "/daily" and argument in {"status", "summary"}:
             return CommandResult(
                 action="respond",
-                command="/daily status",
+                command=f"/daily {argument}",
                 argument=argument,
-                lines=(TerminalLine("chaseos", "daily status command recognized."),),
+                lines=(TerminalLine("chaseos", f"daily {argument} command recognized."),),
             )
         if command == "/resume":
             return CommandResult(
@@ -346,6 +429,13 @@ class CommandRouter:
                 command="/photo source",
                 argument=argument,
                 lines=(TerminalLine("chaseos", "photo source command recognized."),),
+            )
+        if command == "/export" and argument.startswith("support"):
+            return CommandResult(
+                action="respond",
+                command="/export support",
+                argument=argument.removeprefix("support").strip(),
+                lines=(TerminalLine("chaseos", "support export command recognized."),),
             )
         if command == "/generate" and argument == "wallpapers":
             return CommandResult(

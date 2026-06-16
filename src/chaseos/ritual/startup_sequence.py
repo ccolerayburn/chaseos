@@ -11,6 +11,7 @@ from pathlib import Path
 from chaseos import __version__
 from chaseos.app.command_router import CommandResult, TerminalLine, route_command
 from chaseos.app.readiness import ReadinessService
+from chaseos.app.support_export import SupportExportBuilder
 from chaseos.interpretation.checkin_interpreter import LocalCheckInInterpreter
 from chaseos.models.assets import WallpaperManifest
 from chaseos.models.monitor import (
@@ -34,7 +35,7 @@ from chaseos.ritual.prompts import (
 from chaseos.ritual.stages import RitualStage
 from chaseos.ritual.timer import RITUAL_TARGET_MINUTES, RitualTimer
 from chaseos.storage.daily_session_store import DailySessionRecord, DailySessionStore
-from chaseos.storage.paths import get_generated_dir
+from chaseos.storage.paths import get_daily_summary_path, get_generated_dir
 from chaseos.storage.settings_store import MonitorMappingStore
 from chaseos.theming.theme_generator import ThemeGenerator
 from chaseos.wallpaper.applier import WallpaperApplier, WallpaperApplyError
@@ -103,6 +104,26 @@ def _yes_no(value: bool) -> str:
     return "yes" if value else "no"
 
 
+def _signals_summary(signals: dict[str, object]) -> str:
+    if not signals:
+        return "not recorded"
+    keys = ("energy", "clarity", "pressure", "focus_friction", "readiness")
+    parts = [f"{key}={signals[key]}" for key in keys if signals.get(key)]
+    return "; ".join(parts) if parts else "recorded"
+
+
+def _record_status(
+    new_status: str | None,
+    existing_status: str | None,
+    reset: bool,
+) -> str | None:
+    if new_status is not None:
+        return new_status
+    if reset:
+        return None
+    return existing_status
+
+
 class StartupSequence:
     """Owns the current ritual stage, timer, and in-memory session data."""
 
@@ -169,6 +190,12 @@ class StartupSequence:
             return self.start()
         if result.command == "/daily status":
             return SequenceResponse(_chaseos_lines(self.daily_status_lines()))
+        if result.command == "/daily summary":
+            return SequenceResponse(_chaseos_lines(self.daily_summary_lines(write_file=True)))
+        if result.command == "/export support":
+            return SequenceResponse(
+                _chaseos_lines(self.export_support_lines(result.argument or ""))
+            )
         if result.command == "/resume":
             return self.resume_daily_session()
         if result.command == "/version":
@@ -264,7 +291,7 @@ class StartupSequence:
         self.timer.start()
         started_at = self.timer.started_at or datetime.now(UTC)
         self.session = RitualSession(started_at=started_at, current_stage=RitualStage.CHECK_IN)
-        self.save_daily_session()
+        self.save_daily_session(reset_check_status=True)
         return SequenceResponse(
             _chaseos_lines(
                 (
@@ -471,6 +498,7 @@ class StartupSequence:
                 preflight_status=preflight_status,
                 dry_run_status=dry_run_status,
             )
+            self.write_daily_summary()
             return SequenceResponse(_chaseos_lines(tuple(lines)))
         return SequenceResponse(
             (TerminalLine("chaseos", "type done, /approve, or /skip to complete."),)
@@ -845,6 +873,91 @@ class StartupSequence:
         lines.append("No wallpaper changes applied.")
         return tuple(lines)
 
+    def daily_summary_lines(self, *, write_file: bool = False) -> tuple[str, ...]:
+        record = self.daily_sessions.load()
+        if record is None:
+            return (
+                "CHASEOS // DAILY SUMMARY",
+                "No daily startup session found for today.",
+                "Run /start to begin.",
+                "No wallpaper changes applied.",
+            )
+
+        assets_generated = bool(record.generated_assets)
+        poster_path = record.generated_assets.get("display_1_public_poster")
+        next_command = (
+            "/start"
+            if not assets_generated
+            else "/apply wallpapers --confirm"
+            if record.preflight_status == "passed" and record.dry_run_status == "passed"
+            else "/verify wallpapers"
+        )
+        lines = [
+            "CHASEOS // DAILY SUMMARY",
+            f"date: {record.date.isoformat()}",
+            f"startup mode: {record.startup_mode}",
+            f"current stage: {record.current_stage}",
+            f"theme approved: {_yes_no(record.theme_approved)}",
+            f"theme summary: {record.theme_plan_summary or 'not available'}",
+            f"practical signals: {_signals_summary(record.practical_signals)}",
+            f"innovation takeaway: {record.innovation_takeaway or 'not recorded'}",
+            f"assets generated: {_yes_no(assets_generated)}",
+            f"poster path: {poster_path or 'not generated'}",
+            f"wallpaper manifest: {record.wallpaper_manifest_path or 'not generated'}",
+            f"preflight status: {record.preflight_status or 'not run'}",
+            f"dry-run status: {record.dry_run_status or 'not run'}",
+            f"apply status: {record.applied_status or 'not applied by ritual'}",
+            f"next safe command: {next_command}",
+            "No wallpaper changes applied.",
+        ]
+        if write_file:
+            self.write_daily_summary(tuple(lines))
+        return tuple(lines)
+
+    def write_daily_summary(self, lines: tuple[str, ...] | None = None) -> Path | None:
+        record = self.daily_sessions.load()
+        if record is None:
+            return None
+        summary_lines = lines or self.daily_summary_lines(write_file=False)
+        path = get_daily_summary_path(record.date, self.data_dir)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("\n".join(summary_lines) + "\n", encoding="utf-8")
+        return path
+
+    def export_support_lines(self, argument: str) -> tuple[str, ...]:
+        normalized = " ".join(argument.strip().split())
+        if normalized in {"", "--dry-run"}:
+            builder = self._support_export_builder(write_summary=False)
+            lines = list(builder.dry_run().lines())
+            if not normalized:
+                lines.extend(
+                    (
+                        "",
+                        "Plain /export support defaults to dry-run.",
+                        "Use /export support --redacted to create a redacted zip.",
+                    )
+                )
+            return tuple(lines)
+        if normalized == "--redacted":
+            builder = self._support_export_builder(write_summary=True)
+            return builder.create_redacted().lines()
+        return (
+            "CHASEOS // SUPPORT EXPORT FAILED",
+            "Use /export support --dry-run or /export support --redacted.",
+            "Non-redacted export is not available in Phase 15.",
+            "No wallpaper changes applied.",
+        )
+
+    def _support_export_builder(self, *, write_summary: bool) -> SupportExportBuilder:
+        summary_lines = self.daily_summary_lines(write_file=write_summary)
+        return SupportExportBuilder(
+            base_path=self.data_dir,
+            doctor_lines=self.readiness.doctor_lines(),
+            version_lines=tuple(line.text for line in self.version_lines()),
+            daily_status_lines=self.daily_status_lines(),
+            daily_summary_lines=summary_lines,
+        )
+
     def resume_daily_session(self) -> SequenceResponse:
         record = self.daily_sessions.load()
         if record is None:
@@ -898,6 +1011,7 @@ class StartupSequence:
         preflight_status: str | None = None,
         dry_run_status: str | None = None,
         last_error: str | None = None,
+        reset_check_status: bool = False,
     ) -> None:
         started_at = self.session.started_at or datetime.now(UTC)
         existing = self.daily_sessions.load()
@@ -914,20 +1028,22 @@ class StartupSequence:
             poster_approved=self.session.poster_approved,
             generated_assets=self._generated_asset_paths(),
             wallpaper_manifest_path=self._manifest_path_for_record(),
-            preflight_status=preflight_status
-            if preflight_status is not None
-            else existing.preflight_status
-            if existing
-            else None,
-            dry_run_status=dry_run_status
-            if dry_run_status is not None
-            else existing.dry_run_status
-            if existing
-            else None,
+            preflight_status=_record_status(
+                preflight_status,
+                existing.preflight_status if existing else None,
+                reset_check_status,
+            ),
+            dry_run_status=_record_status(
+                dry_run_status,
+                existing.dry_run_status if existing else None,
+                reset_check_status,
+            ),
             applied_status="not_applied_by_ritual",
             last_error=(
                 last_error
                 if last_error is not None
+                else None
+                if reset_check_status
                 else existing.last_error
                 if existing
                 else None
@@ -1106,6 +1222,7 @@ class StartupSequence:
         )
         public_role_assigned = MonitorRole.PUBLIC_SIGNAL in monitor_assignments
         private_roles_assigned = all(role in monitor_assignments for role in REQUIRED_PRIVATE_ROLES)
+        daily_record = self.daily_sessions.load()
         return _chaseos_lines(
             (
                 f"current stage: {self.current_stage.value}",
@@ -1129,6 +1246,13 @@ class StartupSequence:
                     "wallpaper apply manifest exists: "
                     f"{'yes' if self.wallpaper_applier.last_apply_manifest_path.exists() else 'no'}"
                 ),
+                (
+                    "today's session stage: "
+                    f"{daily_record.current_stage if daily_record else 'none'}"
+                ),
+                f"today's assets exist: {_yes_no(self.today_manifest() is not None)}",
+                f"live apply occurred today: {_yes_no(self.live_apply_occurred_today())}",
+                "details: /daily summary",
                 f"monitor mapping source: {monitor_source}",
                 f"public signal role assigned: {'yes' if public_role_assigned else 'no'}",
                 f"private roles assigned: {'yes' if private_roles_assigned else 'no'}",

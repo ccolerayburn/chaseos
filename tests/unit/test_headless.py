@@ -16,6 +16,7 @@ from chaseos.app.headless import (
 )
 from chaseos.ritual.startup_sequence import StartupSequence
 from chaseos.storage.paths import (
+    get_exports_dir,
     get_last_startup_smoke_json_path,
     get_last_startup_smoke_text_path,
     get_last_wallpaper_smoke_json_path,
@@ -94,7 +95,7 @@ def test_command_prints_output_to_stdout() -> None:
 
     run_headless_cli(["--command", "/help"], stdout=stdout)
 
-    assert "available commands:" in stdout.getvalue()
+    assert "CHASEOS // HELP" in stdout.getvalue()
 
 
 def test_command_returns_nonzero_for_validation_failure(tmp_path) -> None:
@@ -267,6 +268,33 @@ def test_command_daily_status_runs_headless(tmp_path) -> None:
 
     assert exit_code == EXIT_SUCCESS
     assert "No daily startup session found for today." in stdout.getvalue()
+
+
+def test_command_daily_summary_runs_headless(tmp_path) -> None:
+    stdout = StringIO()
+
+    exit_code = run_headless_cli(
+        ["--command", "/daily summary"],
+        stdout=stdout,
+        base_path=tmp_path,
+    )
+
+    assert exit_code == EXIT_SUCCESS
+    assert "No daily startup session found for today." in stdout.getvalue()
+
+
+def test_export_support_redacted_runs_headless(tmp_path) -> None:
+    stdout = StringIO()
+
+    exit_code = run_headless_cli(
+        ["--command", "/export support --redacted"],
+        stdout=stdout,
+        base_path=tmp_path,
+    )
+
+    assert exit_code == EXIT_SUCCESS
+    assert get_exports_dir(tmp_path).exists()
+    assert "No wallpaper changes applied." in stdout.getvalue()
 
 
 def test_smoke_startup_runs_non_mutating_end_to_end(tmp_path) -> None:

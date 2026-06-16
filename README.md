@@ -527,6 +527,66 @@ Daily ritual safety notes:
 - `/approve` advances the ritual and may generate assets, but it does not apply
   wallpapers.
 
+## Operator Help And Support Export
+
+Phase 15 adds grouped operator help, a redacted daily summary, and a redacted support
+export bundle.
+
+Help commands:
+
+```text
+/help
+/help startup
+/help wallpapers
+/help monitors
+/help photos
+/help headless
+/help safety
+```
+
+Daily summary:
+
+```text
+/daily summary
+```
+
+Support export:
+
+```text
+/export support --dry-run
+/export support --redacted
+```
+
+Headless examples:
+
+```powershell
+.\.venv\Scripts\python.exe -m chaseos --command "/help wallpapers"
+.\.venv\Scripts\python.exe -m chaseos --command "/daily summary"
+.\.venv\Scripts\python.exe -m chaseos --command "/export support --dry-run"
+.\.venv\Scripts\python.exe -m chaseos --command "/export support --redacted"
+```
+
+The daily summary is written to:
+
+```text
+%LOCALAPPDATA%\ChaseOS\sessions\YYYY-MM-DD\daily_summary.txt
+```
+
+Support exports are written under:
+
+```text
+%LOCALAPPDATA%\ChaseOS\exports\
+```
+
+Phase 15 safety notes:
+
+- Support export is redacted-only.
+- Plain `/export support` defaults to dry-run.
+- Generated images and private Lightroom photos are not included by default.
+- Raw check-in text is not persisted by default.
+- Help, summary, status, doctor, diagnostics, smoke, export, verify, and dry-run commands
+  do not change desktop wallpapers.
+
 ## First-Run Readiness
 
 Refresh dependencies, including the Windows-only wallpaper API support:

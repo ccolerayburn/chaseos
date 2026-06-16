@@ -126,6 +126,23 @@ assets, and eventually applies private wallpapers per monitor.
 - Do not require admin.
 - Do not call OpenAI.
 
+## Operator Help And Support Export Rules
+
+- `/help` must not trigger side effects.
+- `/daily summary` must not include raw check-in text.
+- `daily_summary.txt` must not include raw check-in text.
+- `/export support` must be redacted-only in Phase 15.
+- `/export support` must not include generated images by default.
+- `/export support` must not include Lightroom/general photo files.
+- `/export support` must redact private local paths where practical.
+- `/export support` must never apply/reset wallpapers.
+- Do not persist full command history by default.
+- Do not weaken Phase 9/10/11/12/14 safety gates.
+- Do not modify registry settings.
+- Do not restart Explorer.
+- Do not require admin.
+- Do not call OpenAI.
+
 ## Monitor Layout Rules
 
 - Display 1: portrait public-facing monitor, public innovation poster.

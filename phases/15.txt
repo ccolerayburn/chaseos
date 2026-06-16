@@ -1,0 +1,471 @@
+We are continuing the existing Windows desktop app project ChaseOS.
+
+Do not restart planning from scratch. Continue from completed Phases 1-14.
+
+Repo location:
+
+C:\_Codex\chaseos
+
+Recent commits:
+
+Phase 9:
+47271a7 Add safe per-monitor wallpaper application
+
+Phase 10:
+fd0c834 Add wallpaper diagnostics and preflight verification
+
+Phase 11:
+c5d8962 Add headless command runner and wallpaper smoke workflow
+
+Phase 12:
+07f6cd9 Add first-run readiness and asset preparation
+
+Phase 13:
+4089c8f Record phase 13 live wallpaper acceptance
+
+Phase 14:
+a0a1d9c Integrate daily startup ritual with asset preparation
+
+Current branch state:
+main is clean and ahead of origin/main by 2 commits.
+
+Before implementing Phase 15, push the current commits:
+
+cd C:\_Codex\chaseos
+git status --short
+git push
+
+If push fails, report the reason and continue only if the working tree is clean.
+
+Current Phase 14 verification:
+- pytest: 234 passed
+- ruff check .: all checks passed
+- Initial /daily status found today’s session at CHECK_IN, no wallpaper changes applied.
+- --smoke startup passed, generated assets, preflight passed, dry-run passed.
+- Post-smoke /daily status showed COMPLETE, assets generated, preflight yes, dry-run yes.
+- /assets status showed all four expected assets exist, readable, correct dimensions.
+- --smoke wallpapers passed: status, diagnostics, verify, and dry-run all passed.
+- /apply wallpapers --confirm was not run during Phase 14 verification.
+- /reset wallpapers was not run during Phase 14 verification.
+
+Important UX direction:
+- Keep the tray app and terminal-style command window.
+- Do not add a dashboard.
+- Do not add a visual theme preview.
+- Dark terminal style remains the main UI.
+- Commands remain text-based.
+- Keep the app simple and operator-friendly.
+
+Important privacy/safety rules:
+- No OpenAI calls.
+- No diagnosis.
+- No clinical labels.
+- Public poster must never include private check-in details.
+- Public Display 1 must never use general Lightroom/local photos.
+- Raw “How are you, really?” check-in text must not be persisted by default.
+- Persist only practical non-clinical signals and operational state.
+- Display 1 should use the approved/latest public poster when available.
+- Display 1 generated placeholder is fallback only.
+- Do not modify registry settings.
+- Do not restart Explorer.
+- Do not modify taskbar pins or icons.
+- Do not require admin rights.
+- Do not weaken the Phase 9/10/11/12/14 wallpaper safety gates.
+- Do not run /apply wallpapers --confirm during automated verification.
+- Do not run /reset wallpapers during automated verification.
+
+Known monitor layout:
+- Display 1: portrait public-facing monitor, 1080x1920, Daily Public Innovation Poster.
+- Display 4: landscape private monitor, Left Atmosphere wallpaper.
+- Display 2: landscape private monitor, Center Command wallpaper.
+- Display 3: landscape private monitor, Right Inspiration wallpaper.
+
+Local photo source:
+C:\_Media\Photos\Lightroom\Export
+
+Implement Phase 15: Operator polish, help system, redacted daily summary, and support export.
+
+Goal:
+ChaseOS now has a working end-to-end ritual and safe wallpaper pipeline. Phase 15 should make the app easier to operate and debug without adding a dashboard or weakening privacy. Add better command help, a redacted daily summary, safe transcript/session visibility, and a redacted support export bundle.
+
+Do not redesign the app.
+Do not duplicate command router behavior.
+Do not apply wallpapers automatically.
+Do not store raw check-in text.
+Do not include generated image files in support exports by default.
+
+Step 1: Audit command coverage
+
+Inspect the command router and current command list.
+
+Current command families likely include:
+- /start
+- /resume
+- /daily status
+- /status
+- /help
+- /version
+- /doctor
+- /assets status
+- /prepare wallpapers
+- /wallpaper status
+- /wallpaper diagnostics
+- /verify wallpapers
+- /apply wallpapers
+- /reset wallpapers
+- /monitors
+- /detect monitors
+- /monitor roles
+- /assign display ...
+- /auto assign monitors
+- /save monitors
+- /reset monitors
+- /photos
+- /index photos
+- /photo source
+- /approve
+- /change
+- /regenerate
+- any existing ritual commands
+
+Do not remove existing aliases or behavior.
+
+Step 2: Improve /help
+
+Update /help so it is genuinely useful.
+
+Add grouped sections:
+- Startup ritual
+- Theme and approval
+- Daily assets
+- Wallpaper verification and apply
+- Monitor mapping
+- Photos
+- Readiness and diagnostics
+- Headless usage
+- Safety notes
+
+Add specific help topics if cleanly supported:
+
+/help startup
+/help wallpapers
+/help monitors
+/help photos
+/help headless
+/help safety
+
+If the current command router does not support help topics, add support without overengineering.
+
+Help output should be concise but complete. It should mention:
+- /start begins the daily ritual.
+- /daily status shows today’s session without raw check-in text.
+- /resume resumes today’s ritual.
+- /prepare wallpapers generates assets only.
+- /verify wallpapers and /apply wallpapers --dry-run do not change wallpapers.
+- /apply wallpapers --confirm is the explicit live apply command.
+- Headless live apply requires --allow-desktop-changes.
+- /reset wallpapers restores rollback state.
+- Display 1 never uses general Lightroom/local photos.
+- Raw check-in text is not persisted by default.
+
+Step 3: Add /daily summary
+
+Add:
+
+/daily summary
+
+It must work in GUI and headless mode:
+
+.\.venv\Scripts\python.exe -m chaseos --command "/daily summary"
+
+Output should include:
+- Date.
+- Startup mode.
+- Current stage.
+- Theme approved yes/no.
+- Short theme summary.
+- Practical signals summary.
+- Innovation takeaway, if present.
+- Assets generated yes/no.
+- Poster path, if present.
+- Wallpaper manifest path, if present.
+- Preflight status.
+- Dry-run status.
+- Apply status.
+- Next recommended safe command.
+
+Privacy:
+- Do not include raw check-in text.
+- Do not include clinical labels.
+- Do not include diagnosis-like language.
+- Do not include private photo filenames unless they are already present in the wallpaper manifest and necessary. Prefer counts/status over private photo details.
+- If no session exists, say:
+  No daily startup session found for today.
+  Run /start to begin.
+
+Step 4: Add redacted daily transcript visibility
+
+If the app already stores a session record, add a redacted text summary file, not a raw transcript, at:
+
+%LOCALAPPDATA%\ChaseOS\sessions\YYYY-MM-DD\daily_summary.txt
+
+Write or update this file when:
+- /daily summary is run,
+- the ritual completes asset generation,
+- --smoke startup completes.
+
+The file should include:
+- operational state,
+- practical signals,
+- innovation takeaway,
+- generated asset paths,
+- preflight/dry-run/apply status,
+- no raw check-in text,
+- no clinical labels.
+
+Do not create a full keystroke transcript.
+Do not log every free-text user input.
+The goal is a safe operational summary, not surveillance with better fonts.
+
+Step 5: Add support export command
+
+Add:
+
+/export support --redacted
+
+It must work in GUI and headless mode:
+
+.\.venv\Scripts\python.exe -m chaseos --command "/export support --redacted"
+
+Behavior:
+- Create a timestamped zip file under:
+
+%LOCALAPPDATA%\ChaseOS\exports\
+
+Suggested filename:
+
+chaseos_support_YYYY-MM-DD_HHMMSS_redacted.zip
+
+Include redacted text/JSON files when present:
+- doctor output or doctor report if available
+- /version output
+- /daily status output
+- /daily summary output
+- daily_session.json with raw/private fields removed
+- daily_summary.txt
+- wallpaper_manifest.json
+- public_poster_meta.json
+- monitor_mapping.json
+- last_wallpaper_diagnostics.json
+- last_wallpaper_smoke.json
+- last_startup_smoke.json
+- last_apply_manifest.json
+- previous_wallpapers.json, but redact existing wallpaper paths if they point outside ChaseOS app data
+- README phase/version info if useful
+
+Do not include by default:
+- Generated PNG/JPG images
+- Lightroom/general photo files
+- Raw check-in text
+- Full command history containing free text
+- Anything from C:\_Media\Photos\Lightroom\Export
+- Anything requiring admin access
+
+Redaction rules:
+- Replace the user profile path with %USERPROFILE% where practical.
+- Replace LOCALAPPDATA root with %LOCALAPPDATA% where practical.
+- Replace C:\_Media\Photos\Lightroom\Export paths with <PRIVATE_PHOTO_SOURCE>.
+- Remove or replace any key named raw_check_in, check_in_text, private_check_in, or similar if found.
+- Keep operational fields needed to debug the app.
+
+Output should clearly state:
+- export path
+- files included
+- files skipped
+- no wallpapers changed
+
+Step 6: Add /export support --dry-run
+
+Add:
+
+/export support --dry-run
+
+Behavior:
+- Show what would be included/skipped.
+- Do not create a zip.
+- No wallpaper changes applied.
+
+If the user runs plain:
+
+/export support
+
+Default to dry-run and tell them to use:
+
+/export support --redacted
+
+Do not allow a non-redacted export in Phase 15.
+
+Step 7: Add optional command history UX in GUI if low-risk
+
+If the terminal input widget makes this straightforward, add:
+- Up arrow: previous command/input
+- Down arrow: next command/input
+- Keep history in memory for the session only
+- Do not persist command history by default
+
+If it is not straightforward, skip it and report that it was intentionally left out.
+
+Do not persist free-text ritual inputs as command history.
+
+Step 8: Update /status lightly
+
+If useful, update /status to mention:
+- Today’s session stage.
+- Whether assets exist today.
+- Whether live wallpaper apply has happened today.
+- Suggest /daily summary for details.
+
+Do not bloat /status.
+
+Step 9: Update headless smoke support if needed
+
+Do not change the existing command list for:
+
+--smoke wallpapers
+
+Do not change the existing non-mutating nature of:
+
+--smoke startup
+
+But it is acceptable for --smoke startup to write/update daily_summary.txt after it completes.
+
+Step 10: Update README
+
+Add a Phase 15 section:
+
+Operator help and support export
+
+Document:
+- /help
+- /help startup
+- /help wallpapers
+- /help monitors
+- /help photos
+- /help headless
+- /help safety
+- /daily summary
+- /export support --dry-run
+- /export support --redacted
+
+Document headless examples:
+
+.\.venv\Scripts\python.exe -m chaseos --command "/help wallpapers"
+.\.venv\Scripts\python.exe -m chaseos --command "/daily summary"
+.\.venv\Scripts\python.exe -m chaseos --command "/export support --dry-run"
+.\.venv\Scripts\python.exe -m chaseos --command "/export support --redacted"
+
+Document:
+- Support export is redacted only.
+- Generated images and private Lightroom photos are not included by default.
+- Raw check-in text is not persisted by default.
+- Desktop wallpapers are not changed by help, summary, status, doctor, diagnostics, smoke, or export commands.
+
+Step 11: Update AGENTS.md
+
+Add Phase 15 guardrails:
+- /help must not trigger side effects.
+- /daily summary must not include raw check-in text.
+- daily_summary.txt must not include raw check-in text.
+- /export support must be redacted-only in Phase 15.
+- /export support must not include generated images by default.
+- /export support must not include Lightroom/general photo files.
+- /export support must redact private local paths where practical.
+- /export support must never apply/reset wallpapers.
+- Do not persist full command history by default.
+- Do not weaken Phase 9/10/11/12/14 safety gates.
+- Do not modify registry settings.
+- Do not restart Explorer.
+- Do not require admin.
+- Do not call OpenAI.
+
+Step 12: Tests
+
+Add unit tests. Do not touch real Windows wallpapers.
+
+Minimum tests:
+- /help includes major command groups.
+- /help wallpapers mentions dry-run and explicit confirm.
+- /help safety mentions Display 1 privacy and raw check-in persistence rule.
+- /daily summary reports no session clearly.
+- /daily summary reports existing session.
+- /daily summary does not include raw check-in text.
+- daily_summary.txt is written when /daily summary runs.
+- daily_summary.txt does not include raw check-in text.
+- /export support defaults to dry-run when no flag is provided.
+- /export support --dry-run creates no zip.
+- /export support --redacted creates a zip.
+- Support zip includes expected metadata files when present.
+- Support zip excludes generated PNG/JPG images.
+- Support zip excludes Lightroom/general photo files.
+- Support zip redacts user profile and local app data paths where practical.
+- Support zip removes raw_check_in or check_in_text fields if present.
+- /export support --redacted does not call wallpaper applier.
+- --smoke startup still does not run /apply wallpapers --confirm.
+- --smoke wallpapers command list remains unchanged.
+- Existing Phase 9, 10, 11, 12, and 14 tests still pass.
+
+Step 13: Verification
+
+Run:
+
+cd C:\_Codex\chaseos
+.\.venv\Scripts\python.exe -m pytest
+.\.venv\Scripts\python.exe -m ruff check .
+
+Then run non-mutating headless checks:
+
+.\.venv\Scripts\python.exe -m chaseos --command "/help"
+.\.venv\Scripts\python.exe -m chaseos --command "/help wallpapers"
+.\.venv\Scripts\python.exe -m chaseos --command "/help safety"
+.\.venv\Scripts\python.exe -m chaseos --command "/daily summary"
+.\.venv\Scripts\python.exe -m chaseos --command "/export support --dry-run"
+.\.venv\Scripts\python.exe -m chaseos --command "/export support --redacted"
+.\.venv\Scripts\python.exe -m chaseos --smoke startup
+.\.venv\Scripts\python.exe -m chaseos --smoke wallpapers
+
+Do not run:
+
+.\.venv\Scripts\python.exe -m chaseos --command "/apply wallpapers --confirm" --allow-desktop-changes
+
+Do not run:
+
+.\.venv\Scripts\python.exe -m chaseos --command "/reset wallpapers" --allow-desktop-changes
+
+Those commands change desktop state and are not part of Phase 15 automated verification.
+
+Step 14: Commit
+
+After implementation and passing checks:
+
+git add .
+git commit -m "Add operator help and redacted support export"
+
+Report:
+- Whether the two pending commits were pushed to origin.
+- Files changed.
+- Commands added or changed.
+- Whether GUI command history was added or intentionally skipped.
+- Path to daily_summary.txt.
+- Path to redacted support export zip.
+- Test result.
+- Ruff result.
+- Summary from:
+  - /help
+  - /help wallpapers
+  - /help safety
+  - /daily summary
+  - /export support --dry-run
+  - /export support --redacted
+  - --smoke startup
+  - --smoke wallpapers
+- Confirm that no wallpaper apply/reset command was run during Phase 15 verification.

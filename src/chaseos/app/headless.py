@@ -313,6 +313,7 @@ def _write_startup_smoke_reports(
     text_path = get_last_startup_smoke_text_path(base_path)
     json_path = get_last_startup_smoke_json_path(base_path)
     text_path.parent.mkdir(parents=True, exist_ok=True)
+    sequence.write_daily_summary()
     session = sequence.daily_sessions.load()
     generated_assets = dict(session.generated_assets) if session else {}
 

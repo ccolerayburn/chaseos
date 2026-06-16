@@ -24,6 +24,8 @@ def test_phase_two_commands_are_reserved() -> None:
     assert "/verify" in KNOWN_COMMANDS
     assert "/assets" in KNOWN_COMMANDS
     assert "/prepare" in KNOWN_COMMANDS
+    assert "/daily" in KNOWN_COMMANDS
+    assert "/export" in KNOWN_COMMANDS
     assert "/photos" in KNOWN_COMMANDS
     assert "/index" in KNOWN_COMMANDS
     assert "/photo" in KNOWN_COMMANDS
@@ -36,6 +38,30 @@ def test_help_is_recognized() -> None:
     assert result.command == "/help"
     assert result.action == "respond"
     assert any("/start" in line.text for line in result.lines)
+
+
+def test_help_includes_major_command_groups() -> None:
+    text = "\n".join(line.text for line in route_command("/help").lines)
+
+    assert "Startup ritual" in text
+    assert "Wallpaper verification and apply" in text
+    assert "Monitor mapping" in text
+    assert "Headless usage" in text
+
+
+def test_help_wallpapers_mentions_dry_run_and_explicit_confirm() -> None:
+    text = "\n".join(line.text for line in route_command("/help wallpapers").lines)
+
+    assert "/apply wallpapers --dry-run" in text
+    assert "/apply wallpapers --confirm" in text
+    assert "explicit live apply command" in text
+
+
+def test_help_safety_mentions_public_and_raw_check_in_privacy() -> None:
+    text = "\n".join(line.text for line in route_command("/help safety").lines)
+
+    assert "Raw check-in text is not persisted by default." in text
+    assert "Display 1 never uses general Lightroom/local photos." in text
 
 
 def test_version_is_recognized() -> None:
@@ -231,6 +257,28 @@ def test_assets_status_command_is_recognized() -> None:
 
     assert result.recognized is True
     assert result.command == "/assets status"
+
+
+def test_daily_status_and_summary_commands_are_recognized() -> None:
+    status = route_command("/daily status")
+    summary = route_command("/daily summary")
+
+    assert status.recognized is True
+    assert status.command == "/daily status"
+    assert summary.recognized is True
+    assert summary.command == "/daily summary"
+
+
+def test_export_support_commands_are_recognized() -> None:
+    dry_run = route_command("/export support --dry-run")
+    redacted = route_command("/export support --redacted")
+
+    assert dry_run.recognized is True
+    assert dry_run.command == "/export support"
+    assert dry_run.argument == "--dry-run"
+    assert redacted.recognized is True
+    assert redacted.command == "/export support"
+    assert redacted.argument == "--redacted"
 
 
 def test_prepare_wallpapers_command_is_recognized() -> None:

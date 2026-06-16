@@ -1,4 +1,5 @@
 import json
+import zipfile
 
 import pytest
 from PIL import Image
@@ -7,7 +8,7 @@ from chaseos.models.monitor import MonitorRole
 from chaseos.ritual.stages import RitualStage
 from chaseos.ritual.startup_sequence import StartupSequence
 from chaseos.storage.daily_session_store import DailySessionStore
-from chaseos.storage.paths import get_daily_session_path
+from chaseos.storage.paths import get_daily_session_path, get_daily_summary_path, get_exports_dir
 from chaseos.storage.settings_store import MonitorMappingStore
 from chaseos.wallpaper.applier import WallpaperApplier
 from chaseos.wallpaper.photo_source import PhotoSourceConfig
@@ -327,6 +328,14 @@ def test_daily_status_reports_no_session_clearly(tmp_path) -> None:
     assert "No wallpaper changes applied." in text
 
 
+def test_daily_summary_reports_no_session_clearly(tmp_path) -> None:
+    response = isolated_sequence(tmp_path).handle_input("/daily summary")
+    text = render_response_text(response)
+
+    assert "No daily startup session found for today." in text
+    assert "Run /start to begin." in text
+
+
 def test_daily_status_reports_existing_session_without_raw_check_in_text(tmp_path) -> None:
     raw_check_in = "raw private startup details"
     sequence = isolated_sequence(tmp_path)
@@ -339,6 +348,23 @@ def test_daily_status_reports_existing_session_without_raw_check_in_text(tmp_pat
     assert "current stage: THEME_APPROVAL" in text
     assert "theme approved: no" in text
     assert raw_check_in not in text
+
+
+def test_daily_summary_reports_existing_session_and_writes_redacted_file(tmp_path) -> None:
+    raw_check_in = "raw private startup details"
+    sequence = isolated_sequence(tmp_path)
+    sequence.handle_input("/start")
+    sequence.handle_input(raw_check_in)
+
+    response = sequence.handle_input("/daily summary")
+    text = render_response_text(response)
+    summary_text = get_daily_summary_path(base_path=tmp_path).read_text(encoding="utf-8")
+
+    assert "CHASEOS // DAILY SUMMARY" in text
+    assert "startup mode: Structured Start" in text
+    assert "practical signals:" in text
+    assert raw_check_in not in text
+    assert raw_check_in not in summary_text
 
 
 def test_resume_reports_no_session_clearly(tmp_path) -> None:
@@ -429,6 +455,108 @@ def test_approve_at_work_ramp_does_not_apply_wallpapers(tmp_path) -> None:
 
     assert "Daily assets are ready." in render_response_text(response)
     assert fake.set_calls == []
+
+
+def test_daily_summary_file_is_written_when_ritual_generates_assets(tmp_path) -> None:
+    raw_check_in = "private check in should not land in summary"
+    sequence = isolated_sequence(tmp_path)
+    for user_input in (
+        "/start",
+        raw_check_in,
+        "/approve",
+        "done",
+        "done",
+        "Clear handoffs reduce repeated work.",
+        "/approve",
+        "done",
+    ):
+        sequence.handle_input(user_input)
+
+    summary_text = get_daily_summary_path(base_path=tmp_path).read_text(encoding="utf-8")
+    assert "assets generated: yes" in summary_text
+    assert "Clear handoffs reduce repeated work." in summary_text
+    assert raw_check_in not in summary_text
+
+
+def test_export_support_defaults_to_dry_run_and_creates_no_zip(tmp_path) -> None:
+    response = isolated_sequence(tmp_path).handle_input("/export support")
+    text = render_response_text(response)
+
+    assert "CHASEOS // SUPPORT EXPORT DRY RUN" in text
+    assert "Plain /export support defaults to dry-run." in text
+    assert not get_exports_dir(tmp_path).exists()
+
+
+def test_export_support_dry_run_creates_no_zip(tmp_path) -> None:
+    response = isolated_sequence(tmp_path).handle_input("/export support --dry-run")
+
+    assert "export path: not created" in render_response_text(response)
+    assert not get_exports_dir(tmp_path).exists()
+
+
+def test_export_support_redacted_creates_zip_with_metadata_only(tmp_path) -> None:
+    sequence = isolated_sequence(tmp_path)
+    for user_input in (
+        "/start",
+        "private startup details",
+        "/approve",
+        "done",
+        "done",
+        "Clear handoffs reduce repeated work.",
+        "/approve",
+        "done",
+    ):
+        sequence.handle_input(user_input)
+
+    response = sequence.handle_input("/export support --redacted")
+    text = render_response_text(response)
+    exports = sorted(get_exports_dir(tmp_path).glob("chaseos_support_*_redacted.zip"))
+
+    assert "CHASEOS // SUPPORT EXPORT" in text
+    assert exports
+    with zipfile.ZipFile(exports[-1]) as archive:
+        names = set(archive.namelist())
+        assert "runtime/daily_session.json" in names
+        assert "runtime/daily_summary.txt" in names
+        assert "manifests/wallpaper_manifest.json" in names
+        assert "manifests/public_poster_meta.json" in names
+        assert not any(name.lower().endswith((".png", ".jpg", ".jpeg")) for name in names)
+
+
+def test_export_support_redacts_paths_and_raw_check_in_keys(tmp_path) -> None:
+    sequence = isolated_sequence(tmp_path)
+    sequence.handle_input("/start")
+    session_path = get_daily_session_path(base_path=tmp_path)
+    payload = json.loads(session_path.read_text(encoding="utf-8"))
+    payload["raw_check_in"] = r"C:\Users\ccole\private check-in detail"
+    payload["check_in_text"] = "very private"
+    payload["photo_path"] = r"C:\_Media\Photos\Lightroom\Export\private.jpg"
+    session_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    response = sequence.handle_input("/export support --redacted")
+    assert "No wallpaper changes applied." in render_response_text(response)
+    export = sorted(get_exports_dir(tmp_path).glob("chaseos_support_*_redacted.zip"))[-1]
+
+    with zipfile.ZipFile(export) as archive:
+        session_text = archive.read("runtime/daily_session.json").decode("utf-8")
+    assert "private check-in detail" not in session_text
+    assert "very private" not in session_text
+    assert "<PRIVATE_PHOTO_SOURCE>" in session_text
+    assert "%USERPROFILE%" in session_text or "<REDACTED>" in session_text
+
+
+def test_export_support_excludes_private_photo_source_files(tmp_path) -> None:
+    sequence = isolated_sequence(tmp_path)
+    photo_path = tmp_path / "generated" / "photo.jpg"
+    photo_path.parent.mkdir(parents=True, exist_ok=True)
+    Image.new("RGB", (20, 20), (1, 2, 3)).save(photo_path)
+
+    response = sequence.handle_input("/export support --redacted")
+    export = sorted(get_exports_dir(tmp_path).glob("chaseos_support_*_redacted.zip"))[-1]
+
+    assert "generated image files" in render_response_text(response)
+    with zipfile.ZipFile(export) as archive:
+        assert photo_path.name not in " ".join(archive.namelist())
 
 
 def test_generate_wallpapers_works_when_theme_plan_exists(tmp_path) -> None:
