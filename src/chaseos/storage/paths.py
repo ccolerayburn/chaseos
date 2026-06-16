@@ -67,3 +67,11 @@ def get_last_apply_manifest_path(base_path: Path | str | None = None) -> Path:
 
 def get_last_wallpaper_diagnostics_path(base_path: Path | str | None = None) -> Path:
     return get_wallpaper_state_dir(base_path) / "last_wallpaper_diagnostics.json"
+
+
+def get_last_wallpaper_smoke_text_path(base_path: Path | str | None = None) -> Path:
+    return get_wallpaper_state_dir(base_path) / "last_wallpaper_smoke.txt"
+
+
+def get_last_wallpaper_smoke_json_path(base_path: Path | str | None = None) -> Path:
+    return get_wallpaper_state_dir(base_path) / "last_wallpaper_smoke.json"

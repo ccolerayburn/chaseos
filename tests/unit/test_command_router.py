@@ -3,6 +3,7 @@ from chaseos.app.command_router import KNOWN_COMMANDS, CommandRouter, route_comm
 
 def test_phase_two_commands_are_reserved() -> None:
     assert "/help" in KNOWN_COMMANDS
+    assert "/version" in KNOWN_COMMANDS
     assert "/start" in KNOWN_COMMANDS
     assert "/clear" in KNOWN_COMMANDS
     assert "/exit" in KNOWN_COMMANDS
@@ -32,6 +33,13 @@ def test_help_is_recognized() -> None:
     assert result.command == "/help"
     assert result.action == "respond"
     assert any("/start" in line.text for line in result.lines)
+
+
+def test_version_is_recognized() -> None:
+    result = route_command("/version")
+
+    assert result.recognized is True
+    assert result.command == "/version"
 
 
 def test_start_is_recognized() -> None:

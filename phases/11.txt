@@ -1,0 +1,366 @@
+We are continuing the existing Windows desktop app project ChaseOS.
+
+Do not restart planning from scratch. Continue from completed Phases 1-10.
+
+Repo location:
+
+C:\_Codex\chaseos
+
+Current recent commits:
+
+Phase 9:
+47271a7 Add safe per-monitor wallpaper application
+
+Phase 10:
+fd0c834 Add wallpaper diagnostics and preflight verification
+
+Current verification from Phase 10:
+
+185 passed in 5.28s
+ruff: All checks passed!
+
+Project summary:
+ChaseOS is a Windows tray app with a small terminal-style dark command window. It runs a 15-minute startup ritual, interprets one natural-language check-in into practical non-clinical work-start signals, generates a cyberpunk/minimal theme description, creates a public Display 1 innovation poster, creates private wallpapers for Displays 4/2/3, detects monitor roles, and can safely apply wallpapers per monitor with dry-run and strict preflight validation.
+
+Important UX direction:
+- Keep the tray app and terminal-style command window.
+- Do not add a dashboard.
+- Do not add a visual theme preview.
+- Dark terminal style remains the main UI.
+- Commands remain text-based.
+
+Important privacy/safety rules:
+- No OpenAI calls.
+- No diagnosis.
+- No clinical labels.
+- Public poster must never include private check-in details.
+- Public Display 1 must never use general Lightroom/local photos.
+- Display 1 should use the approved/latest Phase 5 public poster when available.
+- Display 1 generated placeholder is fallback only.
+- Do not modify registry settings.
+- Do not restart Explorer.
+- Do not modify taskbar pins or icons.
+- Do not require admin rights.
+
+Known monitor layout:
+- Display 1: portrait public-facing monitor, 1080x1920, Daily Public Innovation Poster.
+- Display 4: landscape private monitor, Left Atmosphere wallpaper.
+- Display 2: landscape private monitor, Center Command wallpaper.
+- Display 3: landscape private monitor, Right Inspiration wallpaper.
+
+Local photo source:
+C:\_Media\Photos\Lightroom\Export
+
+Current Phase 10 commands:
+- /wallpaper status
+- /wallpaper diagnostics
+- /verify wallpapers
+- /apply wallpapers
+- /apply wallpapers --dry-run
+- /apply wallpapers --confirm
+- /reset wallpapers
+
+Phase 10 note:
+Manual GUI smoke was not run because it requires interactive command entry. The real desktop still needs a user-approved, non-mutating smoke pass:
+
+/wallpaper status
+/wallpaper diagnostics
+/verify wallpapers
+/apply wallpapers --dry-run
+
+Only after that looks correct should the user manually run:
+
+/apply wallpapers --confirm
+
+Implement Phase 11: Headless command runner and non-mutating wallpaper smoke workflow.
+
+Goal:
+Add a safe command-line execution path so ChaseOS commands can be run from PowerShell without launching the GUI terminal. This is for verification, diagnostics, and repeatable smoke testing.
+
+Do not redesign the app.
+Do not duplicate command logic.
+Use the existing command router wherever possible.
+Do not apply wallpapers automatically.
+Do not run /apply wallpapers --confirm during automated verification.
+Do not run /reset wallpapers during automated verification.
+
+Phase 11 requirements:
+
+1. Preserve existing GUI behavior
+
+Running this with no extra args must still launch the normal tray app:
+
+.\.venv\Scripts\python.exe -m chaseos
+
+Do not break the PySide6 tray shell.
+Do not require CLI flags for normal GUI use.
+
+2. Add single-command headless mode
+
+Add support for:
+
+.\.venv\Scripts\python.exe -m chaseos --command "/wallpaper status"
+
+Also support a short alias if clean to implement:
+
+.\.venv\Scripts\python.exe -m chaseos -c "/wallpaper status"
+
+Behavior:
+- Run the provided command through the same command router used by the terminal UI.
+- Print the command output to stdout.
+- Do not open the tray app.
+- Do not open the terminal window.
+- Return useful process exit codes.
+
+Suggested exit codes:
+- 0: command completed successfully.
+- 1: command ran but reported a validation/preflight failure.
+- 2: invalid CLI usage.
+- 3: blocked because the command would mutate desktop state without explicit CLI unlock.
+
+Use existing project conventions if there is already an exit-code pattern.
+
+3. Add headless mutation safety gate
+
+In headless mode, block desktop-mutating commands by default.
+
+These commands must be blocked unless an explicit CLI unlock flag is provided:
+- /apply wallpapers --confirm
+- /reset wallpapers
+
+Add an explicit unlock flag:
+
+--allow-desktop-changes
+
+Behavior:
+- /apply wallpapers and /apply wallpapers --dry-run are allowed without --allow-desktop-changes because they are non-mutating.
+- /wallpaper status is allowed.
+- /wallpaper diagnostics is allowed.
+- /verify wallpapers is allowed.
+- /apply wallpapers --confirm is blocked unless --allow-desktop-changes is present.
+- /reset wallpapers is blocked unless --allow-desktop-changes is present.
+- Even when --allow-desktop-changes is present, /apply wallpapers should still require the command itself to include --confirm before real apply occurs.
+- Never weaken the existing Phase 9/10 validation.
+
+Blocked command output should be clear, for example:
+
+CHASEOS // COMMAND BLOCKED
+
+This command can change desktop wallpaper state.
+Headless mode blocks it unless --allow-desktop-changes is provided.
+
+No changes applied.
+
+4. Add command script mode
+
+Add support for running multiple commands from a text file:
+
+.\.venv\Scripts\python.exe -m chaseos --script .\wallpaper_smoke.txt
+
+Script behavior:
+- One command per line.
+- Blank lines ignored.
+- Lines starting with # ignored.
+- Commands are run in order.
+- Output should clearly separate command sections.
+- The process should continue through all non-mutating commands even if one command fails validation.
+- Mutating commands should be blocked unless --allow-desktop-changes is provided.
+- Return a non-zero exit code if any command fails or is blocked.
+- Do not open GUI.
+
+Example script:
+
+# ChaseOS wallpaper smoke
+/wallpaper status
+/wallpaper diagnostics
+/verify wallpapers
+/apply wallpapers --dry-run
+
+5. Add built-in wallpaper smoke mode
+
+Add support for:
+
+.\.venv\Scripts\python.exe -m chaseos --smoke wallpapers
+
+This should run exactly these non-mutating commands in order:
+
+/wallpaper status
+/wallpaper diagnostics
+/verify wallpapers
+/apply wallpapers --dry-run
+
+Behavior:
+- Do not run /apply wallpapers --confirm.
+- Do not run /reset wallpapers.
+- Do not change wallpapers.
+- Print all output to stdout.
+- Save a text smoke report to:
+
+%LOCALAPPDATA%\ChaseOS\wallpaper_state\last_wallpaper_smoke.txt
+
+- Save a JSON smoke report to:
+
+%LOCALAPPDATA%\ChaseOS\wallpaper_state\last_wallpaper_smoke.json
+
+The JSON report should include:
+- started_at
+- completed_at
+- commands
+- per-command status
+- per-command output
+- aggregate_status
+- exit_code
+
+Suggested aggregate statuses:
+- passed
+- failed
+- blocked
+
+If /verify wallpapers fails because monitor mapping is unresolved, the smoke should still finish and write both smoke report files, then return a non-zero exit code.
+
+6. Add app metadata command if easy and consistent
+
+Add:
+
+/version
+
+Output should include:
+- App name.
+- Current package version if available.
+- Current phase summary or latest implemented phase number if the project already tracks this cleanly.
+- Python version.
+- Platform.
+
+Do not spend much time on this if it fights the existing structure. It is useful for smoke output but not the core of Phase 11.
+
+7. Update README
+
+Add a section:
+
+Headless verification
+
+Document:
+
+Normal GUI launch:
+
+.\.venv\Scripts\python.exe -m chaseos
+
+Single command:
+
+.\.venv\Scripts\python.exe -m chaseos --command "/wallpaper status"
+
+Wallpaper smoke:
+
+.\.venv\Scripts\python.exe -m chaseos --smoke wallpapers
+
+Script mode:
+
+.\.venv\Scripts\python.exe -m chaseos --script .\wallpaper_smoke.txt
+
+Desktop-changing commands are blocked in headless mode unless --allow-desktop-changes is provided.
+
+Document that these are safe and non-mutating:
+
+.\.venv\Scripts\python.exe -m chaseos --command "/wallpaper status"
+.\.venv\Scripts\python.exe -m chaseos --command "/wallpaper diagnostics"
+.\.venv\Scripts\python.exe -m chaseos --command "/verify wallpapers"
+.\.venv\Scripts\python.exe -m chaseos --command "/apply wallpapers --dry-run"
+.\.venv\Scripts\python.exe -m chaseos --smoke wallpapers
+
+Document that this is the only real apply command and should be run only after verification:
+
+.\.venv\Scripts\python.exe -m chaseos --command "/apply wallpapers --confirm" --allow-desktop-changes
+
+Document rollback command:
+
+.\.venv\Scripts\python.exe -m chaseos --command "/reset wallpapers" --allow-desktop-changes
+
+8. Update AGENTS.md
+
+Add Phase 11 guardrails:
+- Headless command mode must use the same command router as the GUI terminal.
+- Do not duplicate command behavior.
+- No GUI should launch in --command, --script, or --smoke mode.
+- Wallpaper smoke must never apply or reset wallpapers.
+- Headless mode must block mutating commands unless --allow-desktop-changes is present.
+- --allow-desktop-changes does not bypass Phase 9/10 validation.
+- Do not weaken Display 1 privacy protections.
+- Do not modify registry settings.
+- Do not restart Explorer.
+- Do not require admin.
+- Do not call OpenAI.
+
+9. Tests
+
+Add unit tests. Do not touch real Windows wallpapers.
+
+Minimum tests:
+- python -m chaseos with no args still selects normal GUI launch path.
+- --command runs a safe command through the command router.
+- -c alias runs a safe command if implemented.
+- --command prints output to stdout.
+- --command returns exit code 0 for successful command.
+- --command returns non-zero for validation failure.
+- Headless /apply wallpapers --dry-run is allowed without --allow-desktop-changes.
+- Headless /apply wallpapers --confirm is blocked without --allow-desktop-changes.
+- Headless /reset wallpapers is blocked without --allow-desktop-changes.
+- Headless /apply wallpapers --confirm is allowed to reach the existing applier only when --allow-desktop-changes is present.
+- --script ignores blank lines and comments.
+- --script runs commands in order.
+- --script returns non-zero if any command fails.
+- --smoke wallpapers runs exactly:
+  - /wallpaper status
+  - /wallpaper diagnostics
+  - /verify wallpapers
+  - /apply wallpapers --dry-run
+- --smoke wallpapers never runs:
+  - /apply wallpapers --confirm
+  - /reset wallpapers
+- --smoke wallpapers writes last_wallpaper_smoke.txt.
+- --smoke wallpapers writes last_wallpaper_smoke.json.
+- Smoke report still writes when /verify wallpapers fails.
+- Existing Phase 9 and Phase 10 tests still pass.
+
+10. Verification
+
+Run:
+
+cd C:\_Codex\chaseos
+.\.venv\Scripts\python.exe -m pytest
+.\.venv\Scripts\python.exe -m ruff check .
+
+Then run non-mutating headless smoke commands:
+
+.\.venv\Scripts\python.exe -m chaseos --command "/wallpaper status"
+.\.venv\Scripts\python.exe -m chaseos --command "/wallpaper diagnostics"
+.\.venv\Scripts\python.exe -m chaseos --command "/verify wallpapers"
+.\.venv\Scripts\python.exe -m chaseos --command "/apply wallpapers --dry-run"
+.\.venv\Scripts\python.exe -m chaseos --smoke wallpapers
+
+Do not run:
+
+.\.venv\Scripts\python.exe -m chaseos --command "/apply wallpapers --confirm" --allow-desktop-changes
+
+Do not run:
+
+.\.venv\Scripts\python.exe -m chaseos --command "/reset wallpapers" --allow-desktop-changes
+
+Those real desktop-changing commands are for later user-approved manual testing only.
+
+11. Commit
+
+After implementation and passing checks:
+
+git add .
+git commit -m "Add headless command runner and wallpaper smoke workflow"
+
+Report:
+- Files changed.
+- CLI flags added.
+- Commands added or changed.
+- Test result.
+- Ruff result.
+- Output summary from non-mutating headless smoke, if run.
+- Path to last_wallpaper_smoke.txt.
+- Path to last_wallpaper_smoke.json.
+- Whether real desktop apply still needs a user-approved manual run.

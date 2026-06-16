@@ -81,6 +81,20 @@ assets, and eventually applies private wallpapers per monitor.
 - Never apply general local photos to Display 1.
 - Do not weaken Display 1 privacy protections.
 
+## Headless Command Rules
+
+- Headless command mode must use the same command router as the GUI terminal.
+- Do not duplicate command behavior.
+- No GUI should launch in `--command`, `--script`, or `--smoke` mode.
+- Wallpaper smoke must never apply or reset wallpapers.
+- Headless mode must block mutating commands unless `--allow-desktop-changes` is present.
+- `--allow-desktop-changes` does not bypass Phase 9/10 validation.
+- Do not weaken Display 1 privacy protections.
+- Do not modify registry settings.
+- Do not restart Explorer.
+- Do not require admin.
+- Do not call OpenAI.
+
 ## Monitor Layout Rules
 
 - Display 1: portrait public-facing monitor, public innovation poster.

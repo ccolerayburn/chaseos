@@ -390,6 +390,66 @@ If monitor mapping looks wrong, use the existing monitor commands:
 - `/assign display 3 right`
 - `/save monitors`
 
+## Headless Verification
+
+Normal GUI launch still uses the tray app:
+
+```powershell
+.\.venv\Scripts\python.exe -m chaseos
+```
+
+Run one command without opening the GUI:
+
+```powershell
+.\.venv\Scripts\python.exe -m chaseos --command "/wallpaper status"
+```
+
+Short alias:
+
+```powershell
+.\.venv\Scripts\python.exe -m chaseos -c "/wallpaper status"
+```
+
+Run the built-in non-mutating wallpaper smoke:
+
+```powershell
+.\.venv\Scripts\python.exe -m chaseos --smoke wallpapers
+```
+
+Run commands from a script file:
+
+```powershell
+.\.venv\Scripts\python.exe -m chaseos --script .\wallpaper_smoke.txt
+```
+
+Script files use one command per line. Blank lines and lines starting with `#` are
+ignored.
+
+These headless commands are safe and non-mutating:
+
+```powershell
+.\.venv\Scripts\python.exe -m chaseos --command "/wallpaper status"
+.\.venv\Scripts\python.exe -m chaseos --command "/wallpaper diagnostics"
+.\.venv\Scripts\python.exe -m chaseos --command "/verify wallpapers"
+.\.venv\Scripts\python.exe -m chaseos --command "/apply wallpapers --dry-run"
+.\.venv\Scripts\python.exe -m chaseos --smoke wallpapers
+```
+
+Desktop-changing commands are blocked in headless mode unless
+`--allow-desktop-changes` is provided. The only real apply command is:
+
+```powershell
+.\.venv\Scripts\python.exe -m chaseos --command "/apply wallpapers --confirm" --allow-desktop-changes
+```
+
+Rollback is also desktop-changing:
+
+```powershell
+.\.venv\Scripts\python.exe -m chaseos --command "/reset wallpapers" --allow-desktop-changes
+```
+
+The unlock flag does not bypass Phase 9/10 validation.
+
 ## Current Limitations
 
 - No OpenAI yet.

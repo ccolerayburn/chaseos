@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import platform
+import sys
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 
+from chaseos import __version__
 from chaseos.app.command_router import CommandResult, TerminalLine, route_command
 from chaseos.interpretation.checkin_interpreter import LocalCheckInInterpreter
 from chaseos.models.assets import WallpaperManifest
@@ -151,6 +154,8 @@ class StartupSequence:
 
         if result.command == "/start":
             return self.start()
+        if result.command == "/version":
+            return SequenceResponse(self.version_lines())
         if result.command == "/reset monitors":
             return self.handle_reset_monitors()
         if result.command == "/reset wallpapers":
@@ -856,6 +861,18 @@ class StartupSequence:
                 f"monitor mapping source: {monitor_source}",
                 f"public signal role assigned: {'yes' if public_role_assigned else 'no'}",
                 f"private roles assigned: {'yes' if private_roles_assigned else 'no'}",
+            )
+        )
+
+    def version_lines(self) -> tuple[TerminalLine, ...]:
+        return _chaseos_lines(
+            (
+                "CHASEOS // VERSION",
+                "app: ChaseOS",
+                f"version: {__version__}",
+                "phase: 11 headless command runner and wallpaper smoke workflow",
+                f"python: {sys.version.split()[0]}",
+                f"platform: {platform.platform()}",
             )
         )
 

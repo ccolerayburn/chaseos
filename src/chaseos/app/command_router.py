@@ -42,6 +42,7 @@ class CommandResult:
 
 KNOWN_COMMANDS = (
     "/help",
+    "/version",
     "/start",
     "/clear",
     "/exit",
@@ -72,6 +73,7 @@ KNOWN_COMMANDS = (
 
 HELP_LINES = (
     TerminalLine("chaseos", "available commands:"),
+    TerminalLine("chaseos", "/version - print ChaseOS version and platform details"),
     TerminalLine("chaseos", "/start - begin the 15-minute text ritual"),
     TerminalLine("chaseos", "/theme - print the current placeholder theme plan"),
     TerminalLine("chaseos", "/poster - print the current placeholder poster plan"),
@@ -124,6 +126,12 @@ class CommandRouter:
 
         if command == "/help":
             return CommandResult(action="respond", command=command, lines=HELP_LINES)
+        if command == "/version":
+            return CommandResult(
+                action="respond",
+                command=command,
+                lines=(TerminalLine("chaseos", "version command recognized."),),
+            )
         if command == "/start":
             return CommandResult(
                 action="respond",
