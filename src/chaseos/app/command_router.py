@@ -45,6 +45,8 @@ KNOWN_COMMANDS = (
     "/version",
     "/doctor",
     "/start",
+    "/daily",
+    "/resume",
     "/clear",
     "/exit",
     "/reset",
@@ -79,6 +81,8 @@ HELP_LINES = (
     TerminalLine("chaseos", "/version - print ChaseOS version and platform details"),
     TerminalLine("chaseos", "/doctor - check ChaseOS runtime readiness"),
     TerminalLine("chaseos", "/assets status - print generated asset readiness"),
+    TerminalLine("chaseos", "/daily status - print today's startup ritual state"),
+    TerminalLine("chaseos", "/resume - resume today's startup ritual state"),
     TerminalLine("chaseos", "/prepare wallpapers --takeaway-file <path> - generate assets only"),
     TerminalLine("chaseos", "/start - begin the 15-minute text ritual"),
     TerminalLine("chaseos", "/theme - print the current placeholder theme plan"),
@@ -149,6 +153,19 @@ class CommandRouter:
                 action="respond",
                 command=command,
                 lines=(TerminalLine("chaseos", "start sequence command recognized."),),
+            )
+        if command == "/daily" and argument == "status":
+            return CommandResult(
+                action="respond",
+                command="/daily status",
+                argument=argument,
+                lines=(TerminalLine("chaseos", "daily status command recognized."),),
+            )
+        if command == "/resume":
+            return CommandResult(
+                action="respond",
+                command=command,
+                lines=(TerminalLine("chaseos", "resume command recognized."),),
             )
         if command == "/clear":
             return CommandResult(action="clear", command=command)

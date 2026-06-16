@@ -49,6 +49,29 @@ def get_sessions_dir(base_path: Path | str | None = None) -> Path:
     return get_chaseos_data_dir(base_path) / "sessions"
 
 
+def get_daily_session_dir(
+    run_date: date | None = None,
+    base_path: Path | str | None = None,
+) -> Path:
+    run_date = run_date or date.today()
+    return get_sessions_dir(base_path) / run_date.isoformat()
+
+
+def get_daily_session_path(
+    run_date: date | None = None,
+    base_path: Path | str | None = None,
+) -> Path:
+    return get_daily_session_dir(run_date, base_path) / "daily_session.json"
+
+
+def get_last_startup_smoke_text_path(base_path: Path | str | None = None) -> Path:
+    return get_daily_session_dir(base_path=base_path) / "last_startup_smoke.txt"
+
+
+def get_last_startup_smoke_json_path(base_path: Path | str | None = None) -> Path:
+    return get_daily_session_dir(base_path=base_path) / "last_startup_smoke.json"
+
+
 def get_logs_dir(base_path: Path | str | None = None) -> Path:
     return get_chaseos_data_dir(base_path) / "logs"
 

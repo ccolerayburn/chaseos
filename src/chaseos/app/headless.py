@@ -14,6 +14,8 @@ from typing import TextIO
 from chaseos.app.command_router import CommandResult, TerminalLine, route_command
 from chaseos.ritual.startup_sequence import StartupSequence
 from chaseos.storage.paths import (
+    get_last_startup_smoke_json_path,
+    get_last_startup_smoke_text_path,
     get_last_wallpaper_smoke_json_path,
     get_last_wallpaper_smoke_text_path,
 )
@@ -28,6 +30,17 @@ WALLPAPER_SMOKE_COMMANDS = (
     "/wallpaper diagnostics",
     "/verify wallpapers",
     "/apply wallpapers --dry-run",
+)
+
+STARTUP_SMOKE_INPUTS = (
+    "/start",
+    "smoke test: clear enough for a structured start",
+    "/approve",
+    "done",
+    "done",
+    "A small visible improvement beats a hidden perfect plan.",
+    "/approve",
+    "done",
 )
 
 MUTATING_COMMANDS = (
@@ -82,10 +95,22 @@ def run_headless_cli(
     if args.smoke == "wallpapers":
         runs = runner.run_commands(WALLPAPER_SMOKE_COMMANDS)
         _print_script_runs(stdout, runs)
-        _write_smoke_reports(runs, base_path=base_path)
+        _write_wallpaper_smoke_reports(runs, base_path=base_path)
+        return _aggregate_exit_code(runs)
+    if args.smoke == "startup":
+        runs = runner.run_commands(STARTUP_SMOKE_INPUTS)
+        _print_script_runs(stdout, runs)
+        _write_startup_smoke_reports(
+            runs,
+            sequence=runner.sequence,
+            base_path=base_path or runner.sequence.data_dir,
+        )
         return _aggregate_exit_code(runs)
 
-    _print_lines(stdout, ("CHASEOS // INVALID CLI USAGE", "Supported smoke target: wallpapers."))
+    _print_lines(
+        stdout,
+        ("CHASEOS // INVALID CLI USAGE", "Supported smoke targets: wallpapers, startup."),
+    )
     return EXIT_USAGE
 
 
@@ -162,7 +187,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="chaseos", add_help=True)
     parser.add_argument("--command", "-c")
     parser.add_argument("--script")
-    parser.add_argument("--smoke", choices=("wallpapers",))
+    parser.add_argument("--smoke", choices=("wallpapers", "startup"))
     parser.add_argument("--allow-desktop-changes", action="store_true")
     return parser
 
@@ -218,7 +243,7 @@ def _print_script_runs(stdout: TextIO, runs: tuple[HeadlessCommandRun, ...]) -> 
         _print_lines(stdout, run.output)
 
 
-def _write_smoke_reports(
+def _write_wallpaper_smoke_reports(
     runs: tuple[HeadlessCommandRun, ...],
     base_path: Path | str | None = None,
 ) -> None:
@@ -263,6 +288,64 @@ def _write_smoke_reports(
                 ],
                 "aggregate_status": aggregate_status,
                 "exit_code": exit_code,
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+
+def _write_startup_smoke_reports(
+    runs: tuple[HeadlessCommandRun, ...],
+    sequence: StartupSequence,
+    base_path: Path | str | None = None,
+) -> None:
+    started_at = datetime.now(UTC)
+    completed_at = datetime.now(UTC)
+    exit_code = _aggregate_exit_code(runs)
+    aggregate_status = (
+        "blocked"
+        if exit_code == EXIT_BLOCKED
+        else "passed"
+        if exit_code == EXIT_SUCCESS
+        else "failed"
+    )
+    text_path = get_last_startup_smoke_text_path(base_path)
+    json_path = get_last_startup_smoke_json_path(base_path)
+    text_path.parent.mkdir(parents=True, exist_ok=True)
+    session = sequence.daily_sessions.load()
+    generated_assets = dict(session.generated_assets) if session else {}
+
+    text_lines = [
+        "CHASEOS // STARTUP SMOKE",
+        "test_data: true",
+        f"aggregate_status: {aggregate_status}",
+        f"exit_code: {exit_code}",
+        "",
+    ]
+    for run in runs:
+        text_lines.extend((f"$ {run.command}", f"status: {run.status}", *run.output, ""))
+    text_path.write_text("\n".join(text_lines).rstrip() + "\n", encoding="utf-8")
+
+    json_path.write_text(
+        json.dumps(
+            {
+                "started_at": started_at.isoformat(),
+                "completed_at": completed_at.isoformat(),
+                "test_data": True,
+                "commands_or_inputs": [run.command for run in runs],
+                "per_step": [
+                    {
+                        "command_or_input": run.command,
+                        "status": run.status,
+                        "exit_code": run.exit_code,
+                        "output": list(run.output),
+                    }
+                    for run in runs
+                ],
+                "aggregate_status": aggregate_status,
+                "exit_code": exit_code,
+                "generated_asset_paths": generated_assets,
             },
             indent=2,
         ),

@@ -109,6 +109,23 @@ assets, and eventually applies private wallpapers per monitor.
 - Do not require admin.
 - Do not call OpenAI.
 
+## Daily Startup Ritual Rules
+
+- The daily ritual may generate poster and wallpaper assets, but must never apply
+  wallpapers automatically.
+- `/approve` must not become a hidden wallpaper apply command.
+- The explicit wallpaper apply boundary remains `/apply wallpapers --confirm`.
+- Headless real apply still requires `--allow-desktop-changes`.
+- Daily session persistence must not store raw check-in text by default.
+- Persist practical non-clinical signals only.
+- Public poster content must come only from the innovation takeaway.
+- Display 1 must never use Lightroom/general photos.
+- Do not weaken Phase 9/10/11/12 wallpaper safety gates.
+- Do not modify registry settings.
+- Do not restart Explorer.
+- Do not require admin.
+- Do not call OpenAI.
+
 ## Monitor Layout Rules
 
 - Display 1: portrait public-facing monitor, public innovation poster.

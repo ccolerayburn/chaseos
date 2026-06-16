@@ -450,6 +450,83 @@ Rollback is also desktop-changing:
 
 The unlock flag does not bypass Phase 9/10 validation.
 
+## Daily Startup Ritual
+
+Normal GUI launch:
+
+```powershell
+.\.venv\Scripts\python.exe -m chaseos
+```
+
+Start the daily ritual:
+
+```text
+/start
+```
+
+The ritual can generate the Display 1 public poster, private Display 4/2/3 wallpapers,
+and `wallpaper_manifest.json`. It then shows asset status, wallpaper preflight, and an
+apply dry-run. It does not apply desktop wallpapers automatically.
+
+Check today's daily state:
+
+```text
+/daily status
+```
+
+Resume today's ritual:
+
+```text
+/resume
+```
+
+Headless daily status:
+
+```powershell
+.\.venv\Scripts\python.exe -m chaseos --command "/daily status"
+```
+
+Run the non-mutating startup smoke:
+
+```powershell
+.\.venv\Scripts\python.exe -m chaseos --smoke startup
+```
+
+Daily session state is saved under:
+
+```text
+%LOCALAPPDATA%\ChaseOS\sessions\YYYY-MM-DD\daily_session.json
+```
+
+Startup smoke reports are saved under:
+
+```text
+%LOCALAPPDATA%\ChaseOS\sessions\YYYY-MM-DD\last_startup_smoke.txt
+%LOCALAPPDATA%\ChaseOS\sessions\YYYY-MM-DD\last_startup_smoke.json
+```
+
+After assets and preflight are ready, the explicit apply command remains:
+
+```text
+/apply wallpapers --confirm
+```
+
+Headless real apply still requires the unlock flag:
+
+```powershell
+.\.venv\Scripts\python.exe -m chaseos --command "/apply wallpapers --confirm" --allow-desktop-changes
+```
+
+Daily ritual safety notes:
+
+- Public poster content is based only on the innovation takeaway.
+- Raw check-in text is not persisted by default.
+- Display 1 never uses Lightroom/general photos.
+- `/start`, `/prepare wallpapers`, `/verify wallpapers`, smoke modes, and dry-run do not
+  apply wallpapers.
+- `/approve` advances the ritual and may generate assets, but it does not apply
+  wallpapers.
+
 ## First-Run Readiness
 
 Refresh dependencies, including the Windows-only wallpaper API support:

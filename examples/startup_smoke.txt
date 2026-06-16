@@ -1,0 +1,9 @@
+# Safe non-mutating daily startup smoke flow.
+/start
+smoke test: clear enough for a structured start
+/approve
+done
+done
+A small visible improvement beats a hidden perfect plan.
+/approve
+done

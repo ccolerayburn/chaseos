@@ -5,7 +5,7 @@ from __future__ import annotations
 import platform
 import sys
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 from chaseos import __version__
@@ -33,6 +33,8 @@ from chaseos.ritual.prompts import (
 )
 from chaseos.ritual.stages import RitualStage
 from chaseos.ritual.timer import RITUAL_TARGET_MINUTES, RitualTimer
+from chaseos.storage.daily_session_store import DailySessionRecord, DailySessionStore
+from chaseos.storage.paths import get_generated_dir
 from chaseos.storage.settings_store import MonitorMappingStore
 from chaseos.theming.theme_generator import ThemeGenerator
 from chaseos.wallpaper.applier import WallpaperApplier, WallpaperApplyError
@@ -41,6 +43,7 @@ from chaseos.wallpaper.photo_indexer import PhotoLibraryIndexer
 from chaseos.wallpaper.photo_source import PhotoSourceConfig
 from chaseos.wallpaper.plan import WallpaperApplyPlanner, WallpaperPlanError
 from chaseos.wallpaper.wallpaper_composer import WallpaperComposer
+from chaseos.wallpaper.wallpaper_manifest import WALLPAPER_MANIFEST_NAME, WallpaperManifestStore
 from chaseos.windows import display_detection
 from chaseos.windows.monitor_roles import (
     REQUIRED_PRIVATE_ROLES,
@@ -96,6 +99,10 @@ def _chaseos_lines(lines: tuple[str, ...]) -> tuple[TerminalLine, ...]:
     return tuple(TerminalLine("chaseos", line) for line in lines)
 
 
+def _yes_no(value: bool) -> str:
+    return "yes" if value else "no"
+
+
 class StartupSequence:
     """Owns the current ritual stage, timer, and in-memory session data."""
 
@@ -134,6 +141,7 @@ class StartupSequence:
             base_path=self.data_dir,
             photo_config=self.photo_config,
         )
+        self.daily_sessions = DailySessionStore(base_path=self.data_dir)
 
     @property
     def current_stage(self) -> RitualStage:
@@ -159,6 +167,10 @@ class StartupSequence:
 
         if result.command == "/start":
             return self.start()
+        if result.command == "/daily status":
+            return SequenceResponse(_chaseos_lines(self.daily_status_lines()))
+        if result.command == "/resume":
+            return self.resume_daily_session()
         if result.command == "/version":
             return SequenceResponse(self.version_lines())
         if result.command == "/doctor":
@@ -252,6 +264,7 @@ class StartupSequence:
         self.timer.start()
         started_at = self.timer.started_at or datetime.now(UTC)
         self.session = RitualSession(started_at=started_at, current_stage=RitualStage.CHECK_IN)
+        self.save_daily_session()
         return SequenceResponse(
             _chaseos_lines(
                 (
@@ -286,6 +299,7 @@ class StartupSequence:
         self.session.current_theme_plan = self.build_theme_plan()
         lines.extend(self.session.current_theme_plan.splitlines())
         self.session.current_stage = RitualStage.THEME_APPROVAL
+        self.save_daily_session()
         lines.extend(
             (
                 "approve this setup, change something, or regenerate?",
@@ -298,6 +312,7 @@ class StartupSequence:
         if result.command in {"/approve", "/skip"}:
             self.session.theme_approved = True
             self.session.current_stage = RitualStage.MINDFULNESS
+            self.save_daily_session()
             return SequenceResponse(_chaseos_lines(MINDFULNESS_LINES))
 
         if result.command == "/change":
@@ -307,6 +322,7 @@ class StartupSequence:
                 )
             self.session.theme_change_requests.append(result.change_request)
             self.session.current_theme_plan = self.build_theme_plan()
+            self.save_daily_session()
             lines = [
                 "theme change request recorded.",
                 *self.session.current_theme_plan.splitlines(),
@@ -322,6 +338,7 @@ class StartupSequence:
         if result.command == "/regenerate":
             self.session.theme_regenerate_count += 1
             self.session.current_theme_plan = self.build_theme_plan()
+            self.save_daily_session()
             lines = ["theme plan regenerated.", *self.session.current_theme_plan.splitlines()]
             lines.extend(
                 (
@@ -338,6 +355,7 @@ class StartupSequence:
     def handle_mindfulness(self, result: CommandResult) -> SequenceResponse:
         if self._is_continue_signal(result):
             self.session.current_stage = RitualStage.VERSE
+            self.save_daily_session()
             return SequenceResponse(_chaseos_lines(VERSE_LINES))
         return SequenceResponse(
             (TerminalLine("chaseos", "type done, /approve, or /skip to continue."),)
@@ -348,6 +366,7 @@ class StartupSequence:
             self.session.current_stage = RitualStage.INNOVATION
             lines = [*INNOVATION_WARMUP_LINES, "what is today's useful insight?"]
             self.session.current_stage = RitualStage.INNOVATION_TAKEAWAY
+            self.save_daily_session()
             return SequenceResponse(_chaseos_lines(tuple(lines)))
         return SequenceResponse(
             (TerminalLine("chaseos", "type done, /approve, or /skip to continue."),)
@@ -358,6 +377,7 @@ class StartupSequence:
         self.session.current_stage = RitualStage.POSTER_PLAN
         self.session.current_poster_plan = self.build_poster_plan()
         self.session.current_stage = RitualStage.POSTER_APPROVAL
+        self.save_daily_session()
         lines = [*self.session.current_poster_plan.splitlines()]
         lines.extend(
             (
@@ -372,6 +392,7 @@ class StartupSequence:
             self.session.poster_approved = True
             render_result = self.render_current_poster()
             self.session.current_stage = RitualStage.WORK_RAMP
+            self.save_daily_session()
             lines = [
                 f"poster rendered: {render_result.image_path}",
                 f"metadata saved: {render_result.metadata_path}",
@@ -386,6 +407,7 @@ class StartupSequence:
                 )
             self.session.poster_change_requests.append(result.change_request)
             self.session.current_poster_plan = self.build_poster_plan(revised=True)
+            self.save_daily_session()
             lines = [
                 "poster change request recorded.",
                 *self.session.current_poster_plan.splitlines(),
@@ -401,6 +423,7 @@ class StartupSequence:
         if result.command == "/regenerate":
             self.session.poster_regenerate_count += 1
             self.session.current_poster_plan = self.build_poster_plan()
+            self.save_daily_session()
             lines = ["poster plan regenerated.", *self.session.current_poster_plan.splitlines()]
             lines.extend(
                 (
@@ -417,24 +440,37 @@ class StartupSequence:
     def handle_work_ramp(self, result: CommandResult) -> SequenceResponse:
         if self._is_continue_signal(result):
             self.session.current_stage = RitualStage.APPLYING
-            manifest = self.generate_private_wallpapers()
+            manifest, preflight_lines, dry_run_lines, preflight_status, dry_run_status = (
+                self.generate_daily_assets_with_checks()
+            )
             lines = [
                 *APPLYING_LINES,
                 "",
-                "GENERATING PRIVATE WALLPAPERS",
+                "GENERATING DAILY ASSETS",
                 "display 4 -> left atmosphere",
                 "display 2 -> center command",
                 "display 3 -> right inspiration",
                 "",
                 *self.wallpaper_output_lines(manifest),
-                "wallpapers generated locally.",
-                "no Windows wallpaper changes applied without /apply wallpapers --confirm.",
+                "",
+                *self.readiness.assets_status_lines(),
+                "",
+                *preflight_lines,
+                "",
+                *dry_run_lines,
+                "",
+                "Daily assets are ready.",
+                "No desktop wallpaper changes were applied.",
+                "Run /apply wallpapers --confirm to apply them.",
                 "start sequence complete.",
-                "phase 9 wallpaper application flow available.",
             ]
             self.session.current_stage = RitualStage.COMPLETE
             self.session.completed_at = datetime.now(UTC)
             self.timer.stop()
+            self.save_daily_session(
+                preflight_status=preflight_status,
+                dry_run_status=dry_run_status,
+            )
             return SequenceResponse(_chaseos_lines(tuple(lines)))
         return SequenceResponse(
             (TerminalLine("chaseos", "type done, /approve, or /skip to complete."),)
@@ -687,6 +723,42 @@ class StartupSequence:
         }
         return manifest
 
+    def generate_daily_assets_with_checks(
+        self,
+    ) -> tuple[WallpaperManifest, tuple[str, ...], tuple[str, ...], str, str]:
+        manifest = self.generate_private_wallpapers()
+        try:
+            layout = self.detect_and_assign_monitors(use_saved=True)
+            diagnostics = self.wallpaper_diagnostics.build(layout)
+            preflight_lines = self.wallpaper_diagnostics.verify_lines(layout)
+            plan = self.wallpaper_planner.build_plan(layout)
+            dry_run_lines = self.wallpaper_applier.dry_run(plan, diagnostics=diagnostics)
+            preflight_status = "passed" if "PREFLIGHT PASSED" in preflight_lines[0] else "failed"
+            dry_run_status = "passed"
+        except (WallpaperPlanError, WallpaperApplyError, OSError, ValueError) as exc:
+            preflight_status = "failed"
+            dry_run_status = "failed"
+            preflight_lines = (
+                "CHASEOS // WALLPAPER PREFLIGHT FAILED",
+                "",
+                f"issue: {exc}",
+                "No changes applied.",
+            )
+            dry_run_lines = (
+                "CHASEOS // WALLPAPER APPLY DRY RUN FAILED",
+                "",
+                f"issue: {exc}",
+                "No changes applied.",
+            )
+            self.save_daily_session(last_error=str(exc))
+        return (
+            manifest,
+            tuple(preflight_lines),
+            tuple(dry_run_lines),
+            preflight_status,
+            dry_run_status,
+        )
+
     def wallpaper_output_lines(self, manifest: WallpaperManifest) -> list[str]:
         public_poster = (
             str(manifest.public_poster_path)
@@ -728,6 +800,192 @@ class StartupSequence:
         return _chaseos_lines(
             tuple(self.wallpaper_output_lines(self.session.private_wallpaper_manifest))
         )
+
+    def daily_status_lines(self) -> tuple[str, ...]:
+        record = self.daily_sessions.load()
+        session_path = self.daily_sessions.path()
+        if record is None:
+            manifest = self.today_manifest()
+            if manifest is None:
+                return (
+                    "CHASEOS // DAILY STATUS",
+                    f"session path: {session_path}",
+                    "No daily startup session found for today.",
+                    "Run /start to begin.",
+                    "No wallpaper changes applied.",
+                )
+            return (
+                "CHASEOS // DAILY STATUS",
+                f"session path: {session_path}",
+                "No active ritual session found, but today's generated assets exist.",
+                "Run /assets status or /apply wallpapers --dry-run to inspect them.",
+                f"wallpaper manifest: {manifest.manifest_path}",
+                "No wallpaper changes applied.",
+            )
+
+        lines = [
+            "CHASEOS // DAILY STATUS",
+            f"session path: {session_path}",
+            f"current stage: {record.current_stage}",
+            f"startup mode: {record.startup_mode}",
+            f"theme approved: {'yes' if record.theme_approved else 'no'}",
+            f"innovation takeaway exists: {'yes' if record.innovation_takeaway else 'no'}",
+            f"poster/assets generated: {'yes' if record.generated_assets else 'no'}",
+            f"wallpaper preflight passed: {_yes_no(record.preflight_status == 'passed')}",
+            f"wallpaper dry-run passed: {_yes_no(record.dry_run_status == 'passed')}",
+            f"live apply occurred today: {_yes_no(self.live_apply_occurred_today())}",
+            f"applied status: {record.applied_status or 'not applied by ritual'}",
+        ]
+        if record.wallpaper_manifest_path:
+            lines.append(f"wallpaper manifest: {record.wallpaper_manifest_path}")
+        for label, path in record.generated_assets.items():
+            lines.append(f"{label}: {path}")
+        if record.last_error:
+            lines.append(f"last error: {record.last_error}")
+        lines.append("No wallpaper changes applied.")
+        return tuple(lines)
+
+    def resume_daily_session(self) -> SequenceResponse:
+        record = self.daily_sessions.load()
+        if record is None:
+            return SequenceResponse(
+                _chaseos_lines(
+                    (
+                        "No daily startup session found for today.",
+                        "Run /start to begin.",
+                        "No wallpaper changes applied.",
+                    )
+                )
+            )
+
+        try:
+            self.session.current_stage = RitualStage(record.current_stage)
+        except ValueError:
+            self.session.current_stage = RitualStage.IDLE
+        self.session.startup_mode = record.startup_mode
+        self.session.placeholder_signals = dict(record.practical_signals)
+        if record.practical_signals:
+            self.session.signals = PracticalSignals.model_validate(record.practical_signals)
+        self.session.theme_approved = record.theme_approved
+        self.session.innovation_takeaway = record.innovation_takeaway
+        self.session.poster_approved = record.poster_approved
+        if self.session.signals is not None:
+            self.session.current_theme_plan = self.build_theme_plan()
+        self.session.private_wallpapers_generated = bool(record.generated_assets)
+        if record.wallpaper_manifest_path:
+            manifest = WallpaperManifestStore().load(Path(record.wallpaper_manifest_path))
+            self.session.private_wallpaper_manifest = manifest
+
+        lines = [
+            "resumed today's daily session.",
+            f"current stage: {self.session.current_stage.value}",
+            f"session path: {self.daily_sessions.path()}",
+        ]
+        if record.generated_assets:
+            lines.extend(
+                (
+                    f"preflight status: {record.preflight_status or 'unknown'}",
+                    f"dry-run status: {record.dry_run_status or 'unknown'}",
+                    "Run /apply wallpapers --confirm to apply them.",
+                )
+            )
+        lines.append("No wallpaper changes applied.")
+        return SequenceResponse(_chaseos_lines(tuple(lines)))
+
+    def save_daily_session(
+        self,
+        *,
+        preflight_status: str | None = None,
+        dry_run_status: str | None = None,
+        last_error: str | None = None,
+    ) -> None:
+        started_at = self.session.started_at or datetime.now(UTC)
+        existing = self.daily_sessions.load()
+        record = DailySessionRecord(
+            date=date.today(),
+            started_at=existing.started_at if existing else started_at,
+            updated_at=datetime.now(UTC),
+            current_stage=self.session.current_stage.value,
+            startup_mode=self.session.startup_mode,
+            practical_signals=self._practical_signals_for_record(),
+            theme_plan_summary=self._theme_plan_summary(),
+            theme_approved=self.session.theme_approved,
+            innovation_takeaway=self.session.innovation_takeaway,
+            poster_approved=self.session.poster_approved,
+            generated_assets=self._generated_asset_paths(),
+            wallpaper_manifest_path=self._manifest_path_for_record(),
+            preflight_status=preflight_status
+            if preflight_status is not None
+            else existing.preflight_status
+            if existing
+            else None,
+            dry_run_status=dry_run_status
+            if dry_run_status is not None
+            else existing.dry_run_status
+            if existing
+            else None,
+            applied_status="not_applied_by_ritual",
+            last_error=(
+                last_error
+                if last_error is not None
+                else existing.last_error
+                if existing
+                else None
+            ),
+        )
+        self.daily_sessions.save(record)
+
+    def _practical_signals_for_record(self) -> dict[str, object]:
+        if self.session.signals is not None:
+            return self.session.signals.model_dump(mode="json")
+        return dict(self.session.placeholder_signals)
+
+    def _theme_plan_summary(self) -> str | None:
+        if self.session.theme_plan is None:
+            return None
+        return (
+            f"{self.session.theme_plan.family.value}; "
+            f"{self.session.theme_plan.palette_label}; "
+            f"{self.session.theme_plan.visual_density.value}"
+        )
+
+    def _generated_asset_paths(self) -> dict[str, str]:
+        manifest = self.session.private_wallpaper_manifest
+        assets: dict[str, str] = {}
+        if manifest is None:
+            if self.session.poster_render_result is not None:
+                assets["display_1_public_poster"] = str(
+                    self.session.poster_render_result.image_path
+                )
+            return assets
+        if manifest.public_poster_path is not None:
+            assets["display_1_public_poster"] = str(manifest.public_poster_path)
+        for key in ("display_4", "display_2", "display_3"):
+            wallpaper = manifest.wallpapers.get(key)
+            if wallpaper is not None:
+                assets[key] = str(wallpaper.image_path)
+        return assets
+
+    def _manifest_path_for_record(self) -> str | None:
+        if self.session.private_wallpaper_manifest is None:
+            return None
+        return str(self.session.private_wallpaper_manifest.manifest_path)
+
+    def today_manifest(self) -> WallpaperManifest | None:
+        path = get_generated_dir(date.today(), self.data_dir) / WALLPAPER_MANIFEST_NAME
+        return WallpaperManifestStore().load(path)
+
+    def live_apply_occurred_today(self) -> bool:
+        path = self.wallpaper_applier.last_apply_manifest_path
+        if not path.exists():
+            return False
+        try:
+            import json
+
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return False
+        return payload.get("generated_date") == date.today().isoformat()
 
     def monitor_role_lines(self) -> tuple[TerminalLine, ...]:
         config = self.monitor_mapping_store.load()

@@ -1,0 +1,461 @@
+We are continuing the existing Windows desktop app project ChaseOS.
+
+Do not restart planning from scratch. Continue from completed Phases 1-13.
+
+Repo location:
+
+C:\_Codex\chaseos
+
+Recent commits:
+
+Phase 9:
+47271a7 Add safe per-monitor wallpaper application
+
+Phase 10:
+fd0c834 Add wallpaper diagnostics and preflight verification
+
+Phase 11:
+c5d8962 Add headless command runner and wallpaper smoke workflow
+
+Phase 12:
+07f6cd9 Add first-run readiness and asset preparation
+
+Phase 13:
+Live wallpaper apply acceptance test completed successfully. There may be an untracked phase note at:
+phases/13.txt
+
+Current Phase 13 acceptance result:
+- pytest: 222 passed in 115.56s
+- ruff: All checks passed
+- /doctor passed Python, PySide6, Pillow, comtypes, and Windows wallpaper API checks.
+- /assets status confirmed all expected assets exist and are readable.
+- /verify wallpapers passed.
+- /apply wallpapers --dry-run resolved all four roles to real monitor IDs by rectangle.
+- /apply wallpapers --confirm was run once with --allow-desktop-changes.
+- All four wallpapers applied successfully.
+- Display 1 received only the public poster.
+- Display 4 received left atmosphere.
+- Display 2 received center command.
+- Display 3 received right inspiration.
+- Rollback state was saved with 4 entries.
+- Apply manifest recorded all 4 roles.
+- Diagnostics had no warnings.
+- Rollback was not needed.
+
+Current live applied paths:
+
+Display 1:
+C:\Users\ccole\AppData\Local\ChaseOS\posters\2026-06-16\display_1_public_signal.png
+
+Display 4:
+C:\Users\ccole\AppData\Local\ChaseOS\generated\2026-06-16\display_4_left_atmosphere.png
+
+Display 2:
+C:\Users\ccole\AppData\Local\ChaseOS\generated\2026-06-16\display_2_center_command.png
+
+Display 3:
+C:\Users\ccole\AppData\Local\ChaseOS\generated\2026-06-16\display_3_right_inspiration.png
+
+State files:
+
+C:\Users\ccole\AppData\Local\ChaseOS\wallpaper_state\previous_wallpapers.json
+C:\Users\ccole\AppData\Local\ChaseOS\wallpaper_state\last_apply_manifest.json
+C:\Users\ccole\AppData\Local\ChaseOS\wallpaper_state\last_wallpaper_diagnostics.json
+
+Important UX direction:
+- Keep the tray app and terminal-style command window.
+- Do not add a dashboard.
+- Do not add a visual theme preview.
+- Dark terminal style remains the main UI.
+- Commands remain text-based.
+
+Important privacy/safety rules:
+- No OpenAI calls.
+- No diagnosis.
+- No clinical labels.
+- Public poster must never include private check-in details.
+- Public Display 1 must never use general Lightroom/local photos.
+- Display 1 should use the approved/latest Phase 5 public poster when available.
+- Display 1 generated placeholder is fallback only.
+- Do not modify registry settings.
+- Do not restart Explorer.
+- Do not modify taskbar pins or icons.
+- Do not require admin rights.
+- Do not weaken the Phase 9/10/11/12 wallpaper safety gates.
+
+Known monitor layout:
+- Display 1: portrait public-facing monitor, 1080x1920, Daily Public Innovation Poster.
+- Display 4: landscape private monitor, Left Atmosphere wallpaper.
+- Display 2: landscape private monitor, Center Command wallpaper.
+- Display 3: landscape private monitor, Right Inspiration wallpaper.
+
+Local photo source:
+C:\_Media\Photos\Lightroom\Export
+
+Implement Phase 14: End-to-end daily startup ritual integration.
+
+Goal:
+ChaseOS now has working poster generation, private wallpaper generation, monitor mapping, preflight verification, safe live apply, doctor/readiness commands, and headless smoke. Phase 14 should integrate these pieces into the actual daily startup ritual so the user can run the normal ChaseOS startup flow and end with generated assets plus a safe wallpaper dry-run, without manually calling /prepare wallpapers.
+
+Do not redesign the app.
+Do not add a dashboard.
+Do not duplicate rendering logic.
+Do not duplicate wallpaper apply logic.
+Reuse the existing ritual state machine, poster engine, wallpaper generation engine, readiness/preparation logic, and wallpaper preflight/dry-run logic.
+
+Step 0: Clean phase record state
+
+Run:
+
+cd C:\_Codex\chaseos
+git status --short
+
+If phases/13.txt exists and is a legitimate phase record, commit it before Phase 14:
+
+git add phases/13.txt
+git commit -m "Record phase 13 live wallpaper acceptance"
+
+If phases/13.txt is junk, delete it and report that.
+
+Do not leave phases/13.txt untracked.
+
+Step 1: Audit current ritual behavior
+
+Inspect the existing startup ritual state machine and command router.
+
+Confirm current behavior for:
+- /start
+- /approve
+- /change
+- /regenerate
+- /status
+- free-text responses during the ritual
+
+Do not rewrite working flow unnecessarily.
+
+Step 2: Integrate asset preparation into the ritual
+
+When the ritual reaches the innovation takeaway stage and the user provides or approves the takeaway, ChaseOS should generate today's assets using the existing safe preparation pipeline.
+
+The ritual should generate:
+- Display 1 public poster from innovation takeaway only.
+- Display 4 left atmosphere wallpaper.
+- Display 2 center command wallpaper.
+- Display 3 right inspiration wallpaper.
+- wallpaper_manifest.json.
+
+The ritual must not apply wallpapers automatically.
+
+After generation, the ritual should run or display the equivalent of:
+- /assets status summary
+- /verify wallpapers summary
+- /apply wallpapers --dry-run summary
+
+Then it should clearly tell the user:
+
+Daily assets are ready.
+No desktop wallpaper changes were applied.
+Run /apply wallpapers --confirm to apply them.
+
+Do not silently apply wallpapers from /approve.
+
+Step 3: Preserve explicit apply boundary
+
+The only command that should apply wallpapers from the ritual remains:
+
+/apply wallpapers --confirm
+
+In headless mode, this still requires:
+
+--allow-desktop-changes
+
+Do not introduce a hidden apply path.
+Do not make /approve apply wallpapers.
+Do not make /start apply wallpapers.
+Do not make /prepare wallpapers apply wallpapers.
+Do not make smoke apply wallpapers.
+
+Step 4: Add daily session persistence
+
+Add a small daily session record so the app can report and resume what happened today.
+
+Suggested path:
+
+%LOCALAPPDATA%\ChaseOS\sessions\YYYY-MM-DD\daily_session.json
+
+Suggested fields:
+- date
+- started_at
+- updated_at
+- current_stage
+- startup_mode
+- practical_signals
+- theme_plan_summary
+- theme_approved
+- innovation_takeaway
+- poster_approved
+- generated_assets
+- wallpaper_manifest_path
+- preflight_status
+- dry_run_status
+- applied_status
+- last_error
+
+Privacy rule:
+Do not persist the raw “How are you, really?” check-in text by default.
+Persist only practical non-clinical signals and operational state.
+Do not include clinical labels.
+Do not include diagnosis-like language.
+
+Step 5: Add daily status command
+
+Add:
+
+/daily status
+
+It must work in GUI and headless mode:
+
+.\.venv\Scripts\python.exe -m chaseos --command "/daily status"
+
+Output should include:
+- Today’s session path, if present.
+- Current ritual stage.
+- Whether theme is approved.
+- Whether innovation takeaway exists.
+- Whether poster/assets were generated.
+- Whether wallpaper preflight passed.
+- Whether dry-run passed.
+- Whether live apply has occurred today, based on last_apply_manifest if available.
+- Paths to generated assets if present.
+- No private raw check-in text.
+- No wallpaper changes applied.
+
+If no daily session exists, say:
+
+No daily startup session found for today.
+Run /start to begin.
+
+Step 6: Add resume support if missing
+
+If the app already has resume behavior, improve it as needed.
+
+If not, add:
+
+/resume
+
+Behavior:
+- Loads today’s daily_session.json if present.
+- Restores the ritual to the saved stage where practical.
+- If assets were generated already, show the asset/preflight status and next safe command.
+- If no session exists, tell the user to run /start.
+- Do not apply wallpapers.
+
+Step 7: Add restart-safe generated asset recognition
+
+If today's session is missing but today's assets and manifest already exist, /daily status should detect that and say something like:
+
+No active ritual session found, but today's generated assets exist.
+Run /assets status or /apply wallpapers --dry-run to inspect them.
+
+Do not create a fake session silently unless that fits the project style. Prefer reporting.
+
+Step 8: Add startup smoke mode
+
+Add a non-mutating startup smoke workflow:
+
+.\.venv\Scripts\python.exe -m chaseos --smoke startup
+
+This should exercise the end-to-end startup ritual in headless mode using deterministic smoke inputs.
+
+It should:
+- Start the ritual.
+- Provide a sample non-clinical check-in response.
+- Approve or adjust the generated theme.
+- Move through mindfulness/verse/innovation stages using existing behavior.
+- Provide an innovation takeaway.
+- Approve poster/assets as needed.
+- Generate daily assets.
+- Run preflight/dry-run.
+- Not apply wallpapers.
+- Not run /apply wallpapers --confirm.
+- Not run /reset wallpapers.
+- Write a startup smoke text report to:
+
+%LOCALAPPDATA%\ChaseOS\sessions\YYYY-MM-DD\last_startup_smoke.txt
+
+- Write a startup smoke JSON report to:
+
+%LOCALAPPDATA%\ChaseOS\sessions\YYYY-MM-DD\last_startup_smoke.json
+
+The JSON report should include:
+- started_at
+- completed_at
+- commands_or_inputs
+- per-step status
+- per-step output
+- aggregate_status
+- exit_code
+- generated_asset_paths if present
+- no raw private check-in text unless the smoke input itself is generic and explicitly marked as test data
+
+If the existing headless script runner can support this cleanly, reuse it.
+Do not duplicate command-router behavior.
+
+Step 9: Add example startup smoke script
+
+Create:
+
+examples/startup_smoke.txt
+
+Contents should be a safe non-mutating scripted startup flow using generic test input only.
+
+Do not include:
+/apply wallpapers --confirm
+/reset wallpapers
+
+Step 10: Update /status if appropriate
+
+If /status is currently general app status, add a concise line pointing to /daily status when a daily session exists.
+
+Do not bloat /status.
+
+Step 11: Update README
+
+Add a Phase 14 section:
+
+Daily startup ritual
+
+Document:
+- Normal GUI launch:
+
+.\.venv\Scripts\python.exe -m chaseos
+
+- Start the ritual:
+
+/start
+
+- Check daily state:
+
+/daily status
+
+- Resume today’s ritual:
+
+/resume
+
+- Headless daily status:
+
+.\.venv\Scripts\python.exe -m chaseos --command "/daily status"
+
+- Non-mutating startup smoke:
+
+.\.venv\Scripts\python.exe -m chaseos --smoke startup
+
+Explain:
+- The ritual can generate daily assets.
+- The ritual does not apply desktop wallpapers automatically.
+- After assets and preflight are ready, use:
+
+/apply wallpapers --confirm
+
+or headless:
+
+.\.venv\Scripts\python.exe -m chaseos --command "/apply wallpapers --confirm" --allow-desktop-changes
+
+Explain again:
+- Public poster content is based only on the innovation takeaway.
+- Raw check-in text is not persisted by default.
+- Display 1 never uses Lightroom/general photos.
+- /start, /prepare wallpapers, /verify wallpapers, smoke modes, and dry-run do not apply wallpapers.
+
+Step 12: Update AGENTS.md
+
+Add Phase 14 guardrails:
+- The daily ritual may generate assets but must not apply wallpapers automatically.
+- /approve must not become a hidden wallpaper apply command.
+- The explicit apply boundary remains /apply wallpapers --confirm.
+- Headless real apply still requires --allow-desktop-changes.
+- Daily session persistence must not store raw check-in text by default.
+- Persist practical non-clinical signals only.
+- Public poster content must come only from innovation takeaway.
+- Display 1 must never use Lightroom/general photos.
+- Do not weaken Phase 9/10/11/12 safety gates.
+- Do not modify registry settings.
+- Do not restart Explorer.
+- Do not require admin.
+- Do not call OpenAI.
+
+Step 13: Tests
+
+Add unit tests. Do not touch real Windows wallpapers.
+
+Minimum tests:
+- /daily status reports no session clearly.
+- /daily status reports an existing session without raw check-in text.
+- /daily status detects existing today assets even without a session.
+- /resume reports no session clearly.
+- /resume loads today’s session when present.
+- Daily session persistence writes date/stage/practical signals.
+- Daily session persistence does not write raw check-in text.
+- Ritual innovation takeaway triggers safe asset generation.
+- Ritual-generated public poster uses innovation takeaway only.
+- Ritual does not apply wallpapers automatically.
+- /approve does not apply wallpapers at the final generated-assets stage.
+- Ritual dry-run/preflight summary is shown after generation.
+- /apply wallpapers --confirm remains the only live apply command.
+- --smoke startup runs a non-mutating end-to-end flow.
+- --smoke startup writes last_startup_smoke.txt.
+- --smoke startup writes last_startup_smoke.json.
+- --smoke startup never runs /apply wallpapers --confirm.
+- --smoke startup never runs /reset wallpapers.
+- Existing Phase 9, 10, 11, and 12 tests still pass.
+
+Step 14: Verification
+
+Run:
+
+cd C:\_Codex\chaseos
+.\.venv\Scripts\python.exe -m pytest
+.\.venv\Scripts\python.exe -m ruff check .
+
+Then run non-mutating headless checks:
+
+.\.venv\Scripts\python.exe -m chaseos --command "/daily status"
+.\.venv\Scripts\python.exe -m chaseos --smoke startup
+.\.venv\Scripts\python.exe -m chaseos --command "/daily status"
+.\.venv\Scripts\python.exe -m chaseos --command "/assets status"
+.\.venv\Scripts\python.exe -m chaseos --smoke wallpapers
+
+Do not run:
+
+.\.venv\Scripts\python.exe -m chaseos --command "/apply wallpapers --confirm" --allow-desktop-changes
+
+Do not run:
+
+.\.venv\Scripts\python.exe -m chaseos --command "/reset wallpapers" --allow-desktop-changes
+
+Those commands change desktop state and are not part of Phase 14 automated verification.
+
+Step 15: Commit
+
+After implementation and passing checks:
+
+git add .
+git commit -m "Integrate daily startup ritual with asset preparation"
+
+Report:
+- What happened to phases/13.txt.
+- Files changed.
+- Commands added or changed.
+- Any changes to /start behavior.
+- Any changes to /approve behavior.
+- Session file path.
+- Startup smoke report paths.
+- Test result.
+- Ruff result.
+- Summary from:
+  - /daily status before startup smoke
+  - --smoke startup
+  - /daily status after startup smoke
+  - /assets status
+  - --smoke wallpapers
+- Confirm that no wallpaper apply/reset command was run during Phase 14 verification.

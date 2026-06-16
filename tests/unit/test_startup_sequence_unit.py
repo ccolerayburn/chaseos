@@ -1,12 +1,22 @@
 import json
 
+import pytest
 from PIL import Image
 
 from chaseos.models.monitor import MonitorRole
 from chaseos.ritual.stages import RitualStage
 from chaseos.ritual.startup_sequence import StartupSequence
+from chaseos.storage.daily_session_store import DailySessionStore
+from chaseos.storage.paths import get_daily_session_path
 from chaseos.storage.settings_store import MonitorMappingStore
+from chaseos.wallpaper.applier import WallpaperApplier
 from chaseos.wallpaper.photo_source import PhotoSourceConfig
+from chaseos.wallpaper.windows_desktop_wallpaper import DesktopWallpaperMonitor
+
+
+@pytest.fixture(autouse=True)
+def use_fallback_monitor_detection(monkeypatch) -> None:
+    monkeypatch.setattr("chaseos.windows.display_detection.detect_monitors", lambda: [])
 
 
 def render_response_text(response) -> str:
@@ -26,10 +36,34 @@ def advance_to_poster_approval(sequence: StartupSequence) -> None:
     sequence.handle_input("we keep repeating the same troubleshooting questions")
 
 
+class FakeDesktopWallpaper:
+    def __init__(self) -> None:
+        self.set_calls: list[tuple[str, str]] = []
+
+    def list_monitors(self) -> tuple[str, ...]:
+        return tuple(monitor.monitor_id for monitor in self.describe_monitors())
+
+    def describe_monitors(self) -> tuple[DesktopWallpaperMonitor, ...]:
+        return (
+            DesktopWallpaperMonitor(0, "fallback_display_1", None, 0, 0, 1080, 1920),
+            DesktopWallpaperMonitor(1, "fallback_display_4", None, 1080, 0, 3000, 1080),
+            DesktopWallpaperMonitor(2, "fallback_display_2", None, 3000, 0, 4920, 1080),
+            DesktopWallpaperMonitor(3, "fallback_display_3", None, 4920, 0, 6840, 1080),
+        )
+
+    def get_wallpaper(self, monitor_id: str) -> str | None:
+        return None
+
+    def set_wallpaper(self, monitor_id: str, image_path: str) -> None:
+        self.set_calls.append((monitor_id, image_path))
+
+
 def isolated_sequence(tmp_path) -> StartupSequence:
+    fake = FakeDesktopWallpaper()
     return StartupSequence(
         data_dir=tmp_path,
         photo_config=PhotoSourceConfig(source_path=tmp_path / "missing_photos"),
+        wallpaper_applier=WallpaperApplier(client=fake, base_path=tmp_path),
     )
 
 
@@ -57,6 +91,21 @@ def test_free_text_check_in_is_captured() -> None:
     sequence.handle_input("tired and scattered but ready to work")
 
     assert sequence.session.raw_check_in == "tired and scattered but ready to work"
+
+
+def test_daily_session_persistence_writes_practical_state_without_raw_check_in(tmp_path) -> None:
+    raw_check_in = "private check in text should stay memory only"
+    sequence = isolated_sequence(tmp_path)
+
+    sequence.handle_input("/start")
+    sequence.handle_input(raw_check_in)
+
+    session_path = get_daily_session_path(base_path=tmp_path)
+    payload = json.loads(session_path.read_text(encoding="utf-8"))
+    assert payload["current_stage"] == "THEME_APPROVAL"
+    assert payload["practical_signals"]
+    assert "raw_check_in" not in payload
+    assert raw_check_in not in session_path.read_text(encoding="utf-8")
 
 
 def test_after_check_in_sequence_reaches_theme_approval() -> None:
@@ -218,6 +267,7 @@ def test_full_happy_path_reaches_complete(tmp_path) -> None:
     assert sequence.session.private_wallpapers_generated is True
     assert sequence.session.private_wallpaper_manifest is not None
     assert set(sequence.session.private_wallpaper_paths) == {"display_4", "display_2", "display_3"}
+    assert DailySessionStore(base_path=tmp_path).load() is not None
 
 
 def test_applying_stage_prints_generated_private_wallpaper_paths(tmp_path) -> None:
@@ -236,11 +286,15 @@ def test_applying_stage_prints_generated_private_wallpaper_paths(tmp_path) -> No
     response = sequence.handle_input("done")
     text = render_response_text(response)
 
-    assert "GENERATING PRIVATE WALLPAPERS" in text
+    assert "GENERATING DAILY ASSETS" in text
     assert "display 4 -> left atmosphere:" in text
     assert "display 2 -> center command:" in text
     assert "display 3 -> right inspiration:" in text
-    assert "no Windows wallpaper changes applied without /apply wallpapers --confirm." in text
+    assert "CHASEOS // WALLPAPER PREFLIGHT PASSED" in text
+    assert "CHASEOS // WALLPAPER APPLY DRY RUN" in text
+    assert "Daily assets are ready." in text
+    assert "No desktop wallpaper changes were applied." in text
+    assert "Run /apply wallpapers --confirm to apply them." in text
 
 
 def test_wallpapers_command_prints_paths_after_generation(tmp_path) -> None:
@@ -262,6 +316,119 @@ def test_wallpapers_command_prints_paths_after_generation(tmp_path) -> None:
 
     assert "WALLPAPER OUTPUTS" in text
     assert "display 4 -> left atmosphere:" in text
+
+
+def test_daily_status_reports_no_session_clearly(tmp_path) -> None:
+    response = isolated_sequence(tmp_path).handle_input("/daily status")
+    text = render_response_text(response)
+
+    assert "No daily startup session found for today." in text
+    assert "Run /start to begin." in text
+    assert "No wallpaper changes applied." in text
+
+
+def test_daily_status_reports_existing_session_without_raw_check_in_text(tmp_path) -> None:
+    raw_check_in = "raw private startup details"
+    sequence = isolated_sequence(tmp_path)
+    sequence.handle_input("/start")
+    sequence.handle_input(raw_check_in)
+
+    response = sequence.handle_input("/daily status")
+    text = render_response_text(response)
+
+    assert "current stage: THEME_APPROVAL" in text
+    assert "theme approved: no" in text
+    assert raw_check_in not in text
+
+
+def test_resume_reports_no_session_clearly(tmp_path) -> None:
+    response = isolated_sequence(tmp_path).handle_input("/resume")
+    text = render_response_text(response)
+
+    assert "No daily startup session found for today." in text
+    assert "Run /start to begin." in text
+
+
+def test_resume_loads_todays_session(tmp_path) -> None:
+    sequence = isolated_sequence(tmp_path)
+    sequence.handle_input("/start")
+    sequence.handle_input("clear and ready")
+    resumed = isolated_sequence(tmp_path)
+
+    response = resumed.handle_input("/resume")
+    text = render_response_text(response)
+
+    assert "resumed today's daily session." in text
+    assert "current stage: THEME_APPROVAL" in text
+    assert resumed.current_stage == RitualStage.THEME_APPROVAL
+
+
+def test_daily_status_detects_today_assets_without_session(tmp_path) -> None:
+    sequence = isolated_sequence(tmp_path)
+    for user_input in (
+        "/start",
+        "clear and focused",
+        "/approve",
+        "done",
+        "done",
+        "Clear handoffs reduce repeated work.",
+        "/approve",
+        "done",
+    ):
+        sequence.handle_input(user_input)
+    get_daily_session_path(base_path=tmp_path).unlink()
+
+    response = isolated_sequence(tmp_path).handle_input("/daily status")
+    text = render_response_text(response)
+
+    assert "No active ritual session found, but today's generated assets exist." in text
+    assert "wallpaper_manifest.json" in text
+
+
+def test_ritual_does_not_apply_wallpapers_automatically(tmp_path) -> None:
+    fake = FakeDesktopWallpaper()
+    sequence = StartupSequence(
+        data_dir=tmp_path,
+        photo_config=PhotoSourceConfig(source_path=tmp_path / "missing_photos"),
+        wallpaper_applier=WallpaperApplier(client=fake, base_path=tmp_path),
+    )
+    for user_input in (
+        "/start",
+        "clear and focused",
+        "/approve",
+        "done",
+        "done",
+        "Clear handoffs reduce repeated work.",
+        "/approve",
+        "done",
+    ):
+        sequence.handle_input(user_input)
+
+    assert fake.set_calls == []
+
+
+def test_approve_at_work_ramp_does_not_apply_wallpapers(tmp_path) -> None:
+    fake = FakeDesktopWallpaper()
+    sequence = StartupSequence(
+        data_dir=tmp_path,
+        photo_config=PhotoSourceConfig(source_path=tmp_path / "missing_photos"),
+        wallpaper_applier=WallpaperApplier(client=fake, base_path=tmp_path),
+    )
+    for user_input in (
+        "/start",
+        "clear and focused",
+        "/approve",
+        "done",
+        "done",
+        "Clear handoffs reduce repeated work.",
+        "/approve",
+    ):
+        sequence.handle_input(user_input)
+
+    response = sequence.handle_input("/approve")
+
+    assert "Daily assets are ready." in render_response_text(response)
+    assert fake.set_calls == []
 
 
 def test_generate_wallpapers_works_when_theme_plan_exists(tmp_path) -> None:
