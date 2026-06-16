@@ -51,3 +51,15 @@ def get_sessions_dir(base_path: Path | str | None = None) -> Path:
 
 def get_logs_dir(base_path: Path | str | None = None) -> Path:
     return get_chaseos_data_dir(base_path) / "logs"
+
+
+def get_wallpaper_state_dir(base_path: Path | str | None = None) -> Path:
+    return get_chaseos_data_dir(base_path) / "wallpaper_state"
+
+
+def get_previous_wallpapers_path(base_path: Path | str | None = None) -> Path:
+    return get_wallpaper_state_dir(base_path) / "previous_wallpapers.json"
+
+
+def get_last_apply_manifest_path(base_path: Path | str | None = None) -> Path:
+    return get_wallpaper_state_dir(base_path) / "last_apply_manifest.json"

@@ -132,7 +132,7 @@ def summarize_monitor_layout(
             f"{monitor.orientation.value} .... {ROLE_DISPLAY_NAMES[role]}"
         )
     lines.append("")
-    lines.append("wallpaper application is not enabled in phase 8.")
+    lines.append("use /apply wallpapers --dry-run to preview wallpaper application.")
     return tuple(lines)
 
 

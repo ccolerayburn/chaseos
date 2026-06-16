@@ -31,8 +31,10 @@ from chaseos.ritual.stages import RitualStage
 from chaseos.ritual.timer import RITUAL_TARGET_MINUTES, RitualTimer
 from chaseos.storage.settings_store import MonitorMappingStore
 from chaseos.theming.theme_generator import ThemeGenerator
+from chaseos.wallpaper.applier import WallpaperApplier, WallpaperApplyError
 from chaseos.wallpaper.photo_indexer import PhotoLibraryIndexer
 from chaseos.wallpaper.photo_source import PhotoSourceConfig
+from chaseos.wallpaper.plan import WallpaperApplyPlanner, WallpaperPlanError
 from chaseos.wallpaper.wallpaper_composer import WallpaperComposer
 from chaseos.windows import display_detection
 from chaseos.windows.monitor_roles import (
@@ -97,20 +99,27 @@ class StartupSequence:
         target_minutes: int = RITUAL_TARGET_MINUTES,
         data_dir: Path | str | None = None,
         photo_config: PhotoSourceConfig | None = None,
+        wallpaper_applier: WallpaperApplier | None = None,
     ) -> None:
+        self.data_dir = Path(data_dir) if data_dir is not None else None
         self.timer = RitualTimer(target_minutes=target_minutes)
         self.session = RitualSession()
         self.interpreter = LocalCheckInInterpreter()
         self.theme_generator = ThemeGenerator()
-        self.poster_engine = PublicPosterEngine(base_path=data_dir)
+        self.poster_engine = PublicPosterEngine(base_path=self.data_dir)
         self.photo_config = photo_config or PhotoSourceConfig()
-        self.photo_indexer = PhotoLibraryIndexer(config=self.photo_config, base_path=data_dir)
-        self.monitor_mapping_store = MonitorMappingStore(base_path=data_dir)
+        self.photo_indexer = PhotoLibraryIndexer(config=self.photo_config, base_path=self.data_dir)
+        self.monitor_mapping_store = MonitorMappingStore(base_path=self.data_dir)
         self.monitor_layout: MonitorLayout | None = None
         self.wallpaper_composer = WallpaperComposer(
-            base_path=data_dir,
+            base_path=self.data_dir,
             photo_config=self.photo_config,
         )
+        self.wallpaper_planner = WallpaperApplyPlanner(
+            base_path=self.data_dir,
+            photo_config=self.photo_config,
+        )
+        self.wallpaper_applier = wallpaper_applier or WallpaperApplier(base_path=self.data_dir)
 
     @property
     def current_stage(self) -> RitualStage:
@@ -138,6 +147,8 @@ class StartupSequence:
             return self.start()
         if result.command == "/reset monitors":
             return self.handle_reset_monitors()
+        if result.command == "/reset wallpapers":
+            return self.handle_reset_wallpapers()
         if result.command == "/reset":
             return self.reset()
         if result.command == "/status":
@@ -162,6 +173,8 @@ class StartupSequence:
             return SequenceResponse(self.wallpaper_lines_or_placeholder())
         if result.command == "/generate wallpapers":
             return self.handle_generate_wallpapers()
+        if result.command == "/apply wallpapers":
+            return self.handle_apply_wallpapers(result.argument or "")
         if result.command == "/photos":
             return SequenceResponse(self.photo_status_lines())
         if result.command == "/index photos":
@@ -385,9 +398,9 @@ class StartupSequence:
                 "",
                 *self.wallpaper_output_lines(manifest),
                 "wallpapers generated locally.",
-                "no Windows wallpaper changes applied in Phase 8.",
+                "no Windows wallpaper changes applied without /apply wallpapers --confirm.",
                 "start sequence complete.",
-                "phase 8 monitor mapping flow verified.",
+                "phase 9 wallpaper application flow available.",
             ]
             self.session.current_stage = RitualStage.COMPLETE
             self.session.completed_at = datetime.now(UTC)
@@ -460,8 +473,40 @@ class StartupSequence:
             "",
             *self.wallpaper_output_lines(manifest),
             "wallpapers generated locally.",
-            "no Windows wallpaper changes applied in Phase 8.",
+            "no Windows wallpaper changes applied without /apply wallpapers --confirm.",
         ]
+        return SequenceResponse(_chaseos_lines(tuple(lines)))
+
+    def handle_apply_wallpapers(self, argument: str) -> SequenceResponse:
+        confirm = argument == "--confirm"
+        if argument not in {"", "--dry-run", "--confirm"}:
+            return SequenceResponse(
+                (
+                    TerminalLine(
+                        "chaseos",
+                        "use /apply wallpapers --dry-run or /apply wallpapers --confirm.",
+                    ),
+                )
+            )
+
+        try:
+            layout = self.detect_and_assign_monitors(use_saved=True)
+            plan = self.wallpaper_planner.build_plan(layout)
+            lines = (
+                self.wallpaper_applier.apply_confirmed(plan)
+                if confirm
+                else self.wallpaper_applier.dry_run(plan)
+            )
+        except (WallpaperPlanError, WallpaperApplyError, OSError, ValueError) as exc:
+            return SequenceResponse((TerminalLine("chaseos", f"wallpaper apply failed: {exc}"),))
+
+        return SequenceResponse(_chaseos_lines(tuple(lines)))
+
+    def handle_reset_wallpapers(self) -> SequenceResponse:
+        try:
+            lines = self.wallpaper_applier.reset()
+        except (WallpaperApplyError, OSError, ValueError) as exc:
+            return SequenceResponse((TerminalLine("chaseos", f"wallpaper reset failed: {exc}"),))
         return SequenceResponse(_chaseos_lines(tuple(lines)))
 
     def handle_index_photos(self) -> SequenceResponse:
@@ -518,7 +563,7 @@ class StartupSequence:
                 (
                     "monitor role mapping saved.",
                     f"config path: {self.monitor_mapping_store.path}",
-                    "wallpaper application is not enabled in phase 8.",
+                    "use /apply wallpapers --dry-run to preview wallpaper application.",
                 )
             )
         )
@@ -532,7 +577,7 @@ class StartupSequence:
                     "monitor role mapping reset.",
                     "saved monitor mapping cleared.",
                     "auto-detect/fallback behavior is active.",
-                    "wallpaper application is not enabled in phase 8.",
+                    "use /apply wallpapers --dry-run to preview wallpaper application.",
                 )
             )
         )
@@ -556,7 +601,7 @@ class StartupSequence:
                 (
                     f"assigned {display_label} -> {role_label}.",
                     f"mapping saved: {self.monitor_mapping_store.path}",
-                    "wallpaper application is not enabled in phase 8.",
+                    "use /apply wallpapers --dry-run to preview wallpaper application.",
                 )
             )
         )
@@ -762,6 +807,10 @@ class StartupSequence:
                 (
                     "monitor mapping exists: "
                     f"{'yes' if self.monitor_mapping_store.exists() else 'no'}"
+                ),
+                (
+                    "wallpaper apply manifest exists: "
+                    f"{'yes' if self.wallpaper_applier.last_apply_manifest_path.exists() else 'no'}"
                 ),
                 f"monitor mapping source: {monitor_source}",
                 f"public signal role assigned: {'yes' if public_role_assigned else 'no'}",

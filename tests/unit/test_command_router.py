@@ -17,6 +17,7 @@ def test_phase_two_commands_are_reserved() -> None:
     assert "/save" in KNOWN_COMMANDS
     assert "/wallpapers" in KNOWN_COMMANDS
     assert "/generate" in KNOWN_COMMANDS
+    assert "/apply" in KNOWN_COMMANDS
     assert "/photos" in KNOWN_COMMANDS
     assert "/index" in KNOWN_COMMANDS
     assert "/photo" in KNOWN_COMMANDS
@@ -118,6 +119,30 @@ def test_generate_wallpapers_command_is_recognized() -> None:
     assert result.command == "/generate wallpapers"
 
 
+def test_apply_wallpapers_defaults_to_dry_run_command() -> None:
+    result = route_command("/apply wallpapers")
+
+    assert result.recognized is True
+    assert result.command == "/apply wallpapers"
+    assert result.argument == ""
+
+
+def test_apply_wallpapers_dry_run_command_is_recognized() -> None:
+    result = route_command("/apply wallpapers --dry-run")
+
+    assert result.recognized is True
+    assert result.command == "/apply wallpapers"
+    assert result.argument == "--dry-run"
+
+
+def test_apply_wallpapers_confirm_command_is_recognized() -> None:
+    result = route_command("/apply wallpapers --confirm")
+
+    assert result.recognized is True
+    assert result.command == "/apply wallpapers"
+    assert result.argument == "--confirm"
+
+
 def test_detect_monitors_command_is_recognized() -> None:
     result = route_command("/detect monitors")
 
@@ -155,6 +180,13 @@ def test_save_and_reset_monitors_commands_are_recognized() -> None:
     assert save.command == "/save monitors"
     assert reset.recognized is True
     assert reset.command == "/reset monitors"
+
+
+def test_reset_wallpapers_command_is_recognized() -> None:
+    result = route_command("/reset wallpapers")
+
+    assert result.recognized is True
+    assert result.command == "/reset wallpapers"
 
 
 def test_photo_status_command_is_recognized() -> None:

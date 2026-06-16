@@ -62,6 +62,19 @@ assets, and eventually applies private wallpapers per monitor.
   systems, credentials, and private health details from public content.
 - General local photos must not be used on Display 1 by default.
 
+## Wallpaper Application Rules
+
+- Phase 9 wallpaper application must default to dry-run.
+- Real Windows wallpaper changes require `/apply wallpapers --confirm`.
+- Save rollback state before setting any wallpaper.
+- Use the per-monitor Windows wallpaper API for application.
+- Do not modify registry settings.
+- Do not restart Explorer.
+- Do not require admin rights.
+- Do not modify taskbar pins or icons.
+- Do not call OpenAI.
+- Never apply general local photos to Display 1.
+
 ## Monitor Layout Rules
 
 - Display 1: portrait public-facing monitor, public innovation poster.
@@ -125,4 +138,3 @@ ChaseOS scaffold ready.
 - `pytest` runs successfully.
 - README exists and explains setup, run, tests, MVP scope, and safety boundaries.
 - AGENTS.md captures durable project rules.
-

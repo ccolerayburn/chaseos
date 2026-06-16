@@ -46,6 +46,7 @@ KNOWN_COMMANDS = (
     "/clear",
     "/exit",
     "/reset",
+    "/apply",
     "/theme",
     "/poster",
     "/approve",
@@ -77,6 +78,9 @@ HELP_LINES = (
     TerminalLine("chaseos", "/regenerate - regenerate the active placeholder plan"),
     TerminalLine("chaseos", "/wallpapers - print generated private wallpaper paths"),
     TerminalLine("chaseos", "/generate wallpapers - generate private wallpapers if a theme exists"),
+    TerminalLine("chaseos", "/apply wallpapers --dry-run - preview per-monitor wallpaper changes"),
+    TerminalLine("chaseos", "/apply wallpapers --confirm - apply wallpapers to Windows"),
+    TerminalLine("chaseos", "/reset wallpapers - restore previous per-monitor wallpapers"),
     TerminalLine("chaseos", "/photos - print local photo index status"),
     TerminalLine("chaseos", "/index photos - index the private Lightroom export folder"),
     TerminalLine("chaseos", "/photo source - print the configured local photo source"),
@@ -135,6 +139,13 @@ class CommandRouter:
                 command="/reset monitors",
                 argument=argument,
                 lines=(TerminalLine("chaseos", "reset monitors command recognized."),),
+            )
+        if command == "/reset" and argument == "wallpapers":
+            return CommandResult(
+                action="respond",
+                command="/reset wallpapers",
+                argument=argument,
+                lines=(TerminalLine("chaseos", "reset wallpapers command recognized."),),
             )
         if command == "/reset":
             return CommandResult(
@@ -272,6 +283,17 @@ class CommandRouter:
                 command="/generate wallpapers",
                 argument=argument,
                 lines=(TerminalLine("chaseos", "generate wallpapers command recognized."),),
+            )
+        if command == "/apply" and argument in {
+            "wallpapers",
+            "wallpapers --dry-run",
+            "wallpapers --confirm",
+        }:
+            return CommandResult(
+                action="respond",
+                command="/apply wallpapers",
+                argument=argument.removeprefix("wallpapers").strip(),
+                lines=(TerminalLine("chaseos", "apply wallpapers command recognized."),),
             )
 
         return CommandResult(

@@ -240,7 +240,7 @@ def test_applying_stage_prints_generated_private_wallpaper_paths(tmp_path) -> No
     assert "display 4 -> left atmosphere:" in text
     assert "display 2 -> center command:" in text
     assert "display 3 -> right inspiration:" in text
-    assert "no Windows wallpaper changes applied in Phase 8." in text
+    assert "no Windows wallpaper changes applied without /apply wallpapers --confirm." in text
 
 
 def test_wallpapers_command_prints_paths_after_generation(tmp_path) -> None:
@@ -389,7 +389,7 @@ def test_monitors_command_returns_fallback_layout_when_detection_fails(
     assert "source .......... fallback" in text
     assert "display 1 .... 1080x1920 portrait .... public signal" in text
     assert "display 4 .... 1920x1080 landscape .... left atmosphere" in text
-    assert "wallpaper application is not enabled in phase 8." in text
+    assert "use /apply wallpapers --dry-run to preview wallpaper application." in text
     assert "real monitor detection unavailable" in text
 
 

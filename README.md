@@ -42,7 +42,7 @@ Or, from the local virtual environment:
 .\.venv\Scripts\python.exe -m pytest
 ```
 
-## Current Phase 8 Scope
+## Current Phase 9 Scope
 
 - Windows-first PySide6 tray app.
 - Small resizable terminal-style GUI, dark gray background, muted amber monospaced text.
@@ -53,8 +53,9 @@ Or, from the local virtual environment:
 - Commands such as `/help`, `/start`, `/approve`, `/change calmer`, `/regenerate`,
   `/monitors`, `/detect monitors`, `/monitor roles`, `/assign display 1 public`,
   `/auto assign monitors`, `/save monitors`, `/reset monitors`, `/photos`,
-  `/index photos`, `/photo source`, `/wallpapers`, `/generate wallpapers`, `/clear`,
-  and `/exit`.
+  `/index photos`, `/photo source`, `/wallpapers`, `/generate wallpapers`,
+  `/apply wallpapers --dry-run`, `/apply wallpapers --confirm`, `/reset wallpapers`,
+  `/clear`, and `/exit`.
 - `/start` runs the full text-only 15-minute ritual flow.
 - The header shows current ritual stage, elapsed time, and remaining target time.
 - The ritual captures a private check-in and runs deterministic local interpretation.
@@ -76,7 +77,8 @@ Or, from the local virtual environment:
 - ChaseOS detects Windows monitor geometry when available, falls back safely to the
   known four-monitor layout when detection is unavailable, and persists ChaseOS monitor
   role mappings.
-- Private wallpapers are generated locally and are not applied to Windows yet.
+- Private wallpapers are generated locally and can be applied per monitor only after
+  explicit confirmation.
 - Runtime generated files should eventually live under `%LOCALAPPDATA%\ChaseOS`.
 
 ## Using `/start`
@@ -251,6 +253,11 @@ Commands:
 - `/wallpapers` prints generated private wallpaper paths.
 - `/generate wallpapers` generates or regenerates private wallpapers after a theme plan
   exists.
+- `/apply wallpapers` previews the per-monitor application plan.
+- `/apply wallpapers --dry-run` previews the per-monitor application plan.
+- `/apply wallpapers --confirm` applies wallpapers to Windows per monitor.
+- `/reset wallpapers` restores the previous per-monitor wallpapers when rollback state
+  exists.
 
 Private wallpapers use abstract local geometry and, when enabled by the theme, private
 local photo hybrids. They do not render the raw check-in, innovation takeaway, poster
@@ -287,13 +294,53 @@ Display 1 public poster restrictions:
 - The generated `display_1_public_signal.png` placeholder is used only when no approved
   public poster path is available.
 
+## Wallpaper Application
+
+Phase 9 adds safe per-monitor Windows wallpaper application.
+
+Dry-run is the default:
+
+```text
+/apply wallpapers
+/apply wallpapers --dry-run
+```
+
+Real wallpaper changes require explicit confirmation:
+
+```text
+/apply wallpapers --confirm
+```
+
+Rollback:
+
+```text
+/reset wallpapers
+```
+
+Application state is saved under:
+
+```text
+%LOCALAPPDATA%\ChaseOS\wallpaper_state\previous_wallpapers.json
+%LOCALAPPDATA%\ChaseOS\wallpaper_state\last_apply_manifest.json
+```
+
+Safety rules:
+
+- ChaseOS saves previous wallpaper state before applying new wallpaper paths.
+- ChaseOS uses the per-monitor Windows wallpaper API.
+- ChaseOS does not modify registry settings.
+- ChaseOS does not restart Explorer.
+- ChaseOS does not require admin rights.
+- ChaseOS does not modify taskbar pins or icons.
+- Display 1 never uses general local photos.
+
 ## Current Limitations
 
 - No OpenAI yet.
 - Monitor labels may vary depending on Windows, GPU, and dock behavior.
 - Fallback layout is used if detection fails.
-- No Windows wallpaper application yet.
-- Wallpapers are not applied yet.
+- Per-monitor wallpaper application requires Windows IDesktopWallpaper support.
+- Rollback skips previous wallpaper paths that no longer exist.
 
 ## Privacy and Safety Boundaries
 
@@ -308,7 +355,8 @@ Display 1 public poster restrictions:
 - Public content must redact ticket numbers, hostnames, URLs, emails, IPs, usernames,
   company names, internal systems, credentials, and private health details.
 - Do not require admin rights.
-- Do not apply wallpapers, call OpenAI, edit registry settings, or modify taskbar pins.
+- Do not apply wallpapers without `/apply wallpapers --confirm`.
+- Do not call OpenAI, edit registry settings, restart Explorer, or modify taskbar pins.
 
 ## Monitor Layout
 
