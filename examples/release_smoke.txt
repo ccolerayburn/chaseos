@@ -1,0 +1,11 @@
+# ChaseOS non-mutating release smoke
+/version
+/doctor
+/release info
+/startup status
+/daily status
+/assets status
+/wallpaper status
+/verify wallpapers
+/apply wallpapers --dry-run
+/export support --dry-run

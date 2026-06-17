@@ -11,6 +11,7 @@ from pathlib import Path
 from chaseos import __version__
 from chaseos.app.command_router import CommandResult, TerminalLine, route_command
 from chaseos.app.readiness import ReadinessService
+from chaseos.app.release_info import ReleaseInfoService
 from chaseos.app.support_export import SupportExportBuilder
 from chaseos.interpretation.checkin_interpreter import LocalCheckInInterpreter
 from chaseos.models.assets import WallpaperManifest
@@ -52,6 +53,7 @@ from chaseos.windows.monitor_roles import (
     auto_assign_known_layout,
     summarize_monitor_layout,
 )
+from chaseos.windows.startup_shortcut import StartupShortcutManager
 
 STARTUP_SEQUENCE_STAGES = tuple(stage.value for stage in RitualStage)
 
@@ -163,6 +165,8 @@ class StartupSequence:
             photo_config=self.photo_config,
         )
         self.daily_sessions = DailySessionStore(base_path=self.data_dir)
+        self.startup_shortcuts = StartupShortcutManager(project_root=Path.cwd())
+        self.release_info = ReleaseInfoService(project_root=Path.cwd(), base_path=self.data_dir)
 
     @property
     def current_stage(self) -> RitualStage:
@@ -196,6 +200,14 @@ class StartupSequence:
             return SequenceResponse(
                 _chaseos_lines(self.export_support_lines(result.argument or ""))
             )
+        if result.command == "/startup status":
+            return SequenceResponse(_chaseos_lines(self.startup_shortcuts.status_lines()))
+        if result.command == "/startup enable":
+            return SequenceResponse(_chaseos_lines(self.startup_shortcuts.enable_lines()))
+        if result.command == "/startup disable":
+            return SequenceResponse(_chaseos_lines(self.startup_shortcuts.disable_lines()))
+        if result.command == "/release info":
+            return SequenceResponse(_chaseos_lines(self.release_info.lines()))
         if result.command == "/resume":
             return self.resume_daily_session()
         if result.command == "/version":

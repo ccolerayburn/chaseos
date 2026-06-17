@@ -83,8 +83,28 @@ def get_logs_dir(base_path: Path | str | None = None) -> Path:
     return get_chaseos_data_dir(base_path) / "logs"
 
 
+def get_runtime_dir(base_path: Path | str | None = None) -> Path:
+    return get_chaseos_data_dir(base_path) / "runtime"
+
+
+def get_single_instance_lock_path(base_path: Path | str | None = None) -> Path:
+    return get_runtime_dir(base_path) / "chaseos.lock"
+
+
 def get_exports_dir(base_path: Path | str | None = None) -> Path:
     return get_chaseos_data_dir(base_path) / "exports"
+
+
+def get_release_dir(base_path: Path | str | None = None) -> Path:
+    return get_chaseos_data_dir(base_path) / "release"
+
+
+def get_last_release_smoke_text_path(base_path: Path | str | None = None) -> Path:
+    return get_release_dir(base_path) / "last_release_smoke.txt"
+
+
+def get_last_release_smoke_json_path(base_path: Path | str | None = None) -> Path:
+    return get_release_dir(base_path) / "last_release_smoke.json"
 
 
 def get_wallpaper_state_dir(base_path: Path | str | None = None) -> Path:

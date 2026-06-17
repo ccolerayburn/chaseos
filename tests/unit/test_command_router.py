@@ -26,6 +26,8 @@ def test_phase_two_commands_are_reserved() -> None:
     assert "/prepare" in KNOWN_COMMANDS
     assert "/daily" in KNOWN_COMMANDS
     assert "/export" in KNOWN_COMMANDS
+    assert "/startup" in KNOWN_COMMANDS
+    assert "/release" in KNOWN_COMMANDS
     assert "/photos" in KNOWN_COMMANDS
     assert "/index" in KNOWN_COMMANDS
     assert "/photo" in KNOWN_COMMANDS
@@ -279,6 +281,23 @@ def test_export_support_commands_are_recognized() -> None:
     assert redacted.recognized is True
     assert redacted.command == "/export support"
     assert redacted.argument == "--redacted"
+
+
+def test_startup_commands_are_recognized() -> None:
+    status = route_command("/startup status")
+    enable = route_command("/startup enable")
+    disable = route_command("/startup disable")
+
+    assert status.command == "/startup status"
+    assert enable.command == "/startup enable"
+    assert disable.command == "/startup disable"
+
+
+def test_release_info_command_is_recognized() -> None:
+    result = route_command("/release info")
+
+    assert result.recognized is True
+    assert result.command == "/release info"
 
 
 def test_prepare_wallpapers_command_is_recognized() -> None:

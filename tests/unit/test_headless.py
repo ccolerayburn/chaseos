@@ -10,6 +10,7 @@ from chaseos.app.headless import (
     EXIT_BLOCKED,
     EXIT_FAILURE,
     EXIT_SUCCESS,
+    RELEASE_SMOKE_COMMANDS,
     HeadlessCommandRun,
     HeadlessCommandRunner,
     run_headless_cli,
@@ -17,6 +18,8 @@ from chaseos.app.headless import (
 from chaseos.ritual.startup_sequence import StartupSequence
 from chaseos.storage.paths import (
     get_exports_dir,
+    get_last_release_smoke_json_path,
+    get_last_release_smoke_text_path,
     get_last_startup_smoke_json_path,
     get_last_startup_smoke_text_path,
     get_last_wallpaper_smoke_json_path,
@@ -295,6 +298,38 @@ def test_export_support_redacted_runs_headless(tmp_path) -> None:
     assert exit_code == EXIT_SUCCESS
     assert get_exports_dir(tmp_path).exists()
     assert "No wallpaper changes applied." in stdout.getvalue()
+
+
+def test_smoke_release_runs_expected_non_mutating_commands() -> None:
+    assert RELEASE_SMOKE_COMMANDS == (
+        "/version",
+        "/doctor",
+        "/release info",
+        "/startup status",
+        "/daily status",
+        "/assets status",
+        "/wallpaper status",
+        "/verify wallpapers",
+        "/apply wallpapers --dry-run",
+        "/export support --dry-run",
+    )
+    assert "/startup enable" not in RELEASE_SMOKE_COMMANDS
+    assert "/startup disable" not in RELEASE_SMOKE_COMMANDS
+    assert "/apply wallpapers --confirm" not in RELEASE_SMOKE_COMMANDS
+    assert "/reset wallpapers" not in RELEASE_SMOKE_COMMANDS
+
+
+def test_smoke_release_writes_text_and_json_reports(tmp_path) -> None:
+    stdout = StringIO()
+
+    run_headless_cli(["--smoke", "release"], stdout=stdout, base_path=tmp_path)
+
+    assert get_last_release_smoke_text_path(tmp_path).exists()
+    assert get_last_release_smoke_json_path(tmp_path).exists()
+    payload = json.loads(get_last_release_smoke_json_path(tmp_path).read_text(encoding="utf-8"))
+    assert payload["commands"] == list(RELEASE_SMOKE_COMMANDS)
+    assert payload["no_wallpaper_changes_applied"] is True
+    assert payload["no_startup_changes_applied"] is True
 
 
 def test_smoke_startup_runs_non_mutating_end_to_end(tmp_path) -> None:

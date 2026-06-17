@@ -14,6 +14,8 @@ from typing import TextIO
 from chaseos.app.command_router import CommandResult, TerminalLine, route_command
 from chaseos.ritual.startup_sequence import StartupSequence
 from chaseos.storage.paths import (
+    get_last_release_smoke_json_path,
+    get_last_release_smoke_text_path,
     get_last_startup_smoke_json_path,
     get_last_startup_smoke_text_path,
     get_last_wallpaper_smoke_json_path,
@@ -41,6 +43,19 @@ STARTUP_SMOKE_INPUTS = (
     "A small visible improvement beats a hidden perfect plan.",
     "/approve",
     "done",
+)
+
+RELEASE_SMOKE_COMMANDS = (
+    "/version",
+    "/doctor",
+    "/release info",
+    "/startup status",
+    "/daily status",
+    "/assets status",
+    "/wallpaper status",
+    "/verify wallpapers",
+    "/apply wallpapers --dry-run",
+    "/export support --dry-run",
 )
 
 MUTATING_COMMANDS = (
@@ -106,10 +121,15 @@ def run_headless_cli(
             base_path=base_path or runner.sequence.data_dir,
         )
         return _aggregate_exit_code(runs)
+    if args.smoke == "release":
+        runs = runner.run_commands(RELEASE_SMOKE_COMMANDS)
+        _print_script_runs(stdout, runs)
+        _write_release_smoke_reports(runs, base_path=base_path)
+        return _aggregate_exit_code(runs)
 
     _print_lines(
         stdout,
-        ("CHASEOS // INVALID CLI USAGE", "Supported smoke targets: wallpapers, startup."),
+        ("CHASEOS // INVALID CLI USAGE", "Supported smoke targets: wallpapers, startup, release."),
     )
     return EXIT_USAGE
 
@@ -187,7 +207,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="chaseos", add_help=True)
     parser.add_argument("--command", "-c")
     parser.add_argument("--script")
-    parser.add_argument("--smoke", choices=("wallpapers", "startup"))
+    parser.add_argument("--smoke", choices=("wallpapers", "startup", "release"))
     parser.add_argument("--allow-desktop-changes", action="store_true")
     return parser
 
@@ -347,6 +367,62 @@ def _write_startup_smoke_reports(
                 "aggregate_status": aggregate_status,
                 "exit_code": exit_code,
                 "generated_asset_paths": generated_assets,
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+
+def _write_release_smoke_reports(
+    runs: tuple[HeadlessCommandRun, ...],
+    base_path: Path | str | None = None,
+) -> None:
+    started_at = datetime.now(UTC)
+    completed_at = datetime.now(UTC)
+    exit_code = _aggregate_exit_code(runs)
+    aggregate_status = (
+        "blocked"
+        if exit_code == EXIT_BLOCKED
+        else "passed"
+        if exit_code == EXIT_SUCCESS
+        else "failed"
+    )
+    text_path = get_last_release_smoke_text_path(base_path)
+    json_path = get_last_release_smoke_json_path(base_path)
+    text_path.parent.mkdir(parents=True, exist_ok=True)
+
+    text_lines = [
+        "CHASEOS // RELEASE SMOKE",
+        f"aggregate_status: {aggregate_status}",
+        f"exit_code: {exit_code}",
+        "no wallpaper changes applied: yes",
+        "no startup changes applied: yes",
+        "",
+    ]
+    for run in runs:
+        text_lines.extend((f"$ {run.command}", f"status: {run.status}", *run.output, ""))
+    text_path.write_text("\n".join(text_lines).rstrip() + "\n", encoding="utf-8")
+
+    json_path.write_text(
+        json.dumps(
+            {
+                "started_at": started_at.isoformat(),
+                "completed_at": completed_at.isoformat(),
+                "commands": [run.command for run in runs],
+                "per_command": [
+                    {
+                        "command": run.command,
+                        "status": run.status,
+                        "exit_code": run.exit_code,
+                        "output": list(run.output),
+                    }
+                    for run in runs
+                ],
+                "aggregate_status": aggregate_status,
+                "exit_code": exit_code,
+                "no_wallpaper_changes_applied": True,
+                "no_startup_changes_applied": True,
             },
             indent=2,
         ),

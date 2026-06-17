@@ -143,6 +143,19 @@ assets, and eventually applies private wallpapers per monitor.
 - Do not require admin.
 - Do not call OpenAI.
 
+## Windows Operation And Release Readiness Rules
+
+- Single-instance guard must not block headless commands.
+- Startup management must use the per-user Startup folder shortcut only.
+- Do not use registry Run keys.
+- Do not create scheduled tasks.
+- Do not require admin.
+- Do not modify taskbar pins/icons.
+- Tray menu must not include wallpaper apply/reset actions.
+- Release smoke must be non-mutating.
+- Do not weaken wallpaper safety gates.
+- Do not call OpenAI.
+
 ## Monitor Layout Rules
 
 - Display 1: portrait public-facing monitor, public innovation poster.

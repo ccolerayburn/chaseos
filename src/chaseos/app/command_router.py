@@ -47,6 +47,8 @@ KNOWN_COMMANDS = (
     "/start",
     "/daily",
     "/export",
+    "/startup",
+    "/release",
     "/resume",
     "/clear",
     "/exit",
@@ -112,8 +114,9 @@ HELP_TOPICS: dict[str, tuple[str, ...]] = {
         "  /photos, /index photos, /photo source",
         "",
         "Readiness and diagnostics",
-        "  /doctor, /status, /version",
+        "  /doctor, /status, /version, /release info",
         "  /export support --dry-run, /export support --redacted",
+        "  /startup status - inspect per-user Startup shortcut",
         "",
         "Headless usage",
         "  python -m chaseos --command \"/daily status\"",
@@ -243,6 +246,20 @@ class CommandRouter:
                 command=f"/daily {argument}",
                 argument=argument,
                 lines=(TerminalLine("chaseos", f"daily {argument} command recognized."),),
+            )
+        if command == "/startup" and argument in {"status", "enable", "disable"}:
+            return CommandResult(
+                action="respond",
+                command=f"/startup {argument}",
+                argument=argument,
+                lines=(TerminalLine("chaseos", f"startup {argument} command recognized."),),
+            )
+        if command == "/release" and argument == "info":
+            return CommandResult(
+                action="respond",
+                command="/release info",
+                argument=argument,
+                lines=(TerminalLine("chaseos", "release info command recognized."),),
             )
         if command == "/resume":
             return CommandResult(

@@ -12,6 +12,17 @@ from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 from chaseos.app.app_state import AppState
 from chaseos.app.command_router import CommandResult, CommandRouter, TerminalLine
 from chaseos.app.terminal_window import TerminalWindow
+from chaseos.windows.single_instance import SingleInstanceGuard
+
+SAFE_TRAY_ACTIONS = (
+    ("Open ChaseOS", None),
+    ("Start daily ritual", "/start"),
+    ("Daily status", "/daily status"),
+    ("Wallpaper dry-run", "/apply wallpapers --dry-run"),
+    ("Wallpaper status", "/wallpaper status"),
+    ("Help", "/help"),
+    ("Quit", None),
+)
 
 
 def create_fallback_icon() -> QIcon:
@@ -64,35 +75,22 @@ class ChaseOSTrayApp:
 
     def _build_tray_menu(self) -> QMenu:
         menu = QMenu()
+        self._add_menu_action(menu, "Open ChaseOS", self.show_window)
+        self._add_menu_action(menu, "Start daily ritual", lambda: self._run_menu_command("/start"))
+        self._add_menu_action(menu, "Daily status", lambda: self._run_menu_command("/daily status"))
         self._add_menu_action(
             menu,
-            "Start 15-Minute Sequence",
-            lambda: self._run_menu_command("/start"),
-        )
-        self._add_menu_action(menu, "Quick Theme Shift", lambda: self._run_menu_command("/theme"))
-        self._add_menu_action(
-            menu,
-            "Today's Public Poster",
-            lambda: self._run_menu_command("/poster"),
+            "Wallpaper dry-run",
+            lambda: self._run_menu_command("/apply wallpapers --dry-run"),
         )
         self._add_menu_action(
             menu,
-            "Regenerate Wallpapers",
-            lambda: self._run_menu_command("/regenerate"),
+            "Wallpaper status",
+            lambda: self._run_menu_command("/wallpaper status"),
         )
-        self._add_menu_action(
-            menu,
-            "Open Poster Archive",
-            lambda: self._show_placeholder("poster archive placeholder ready."),
-        )
-        self._add_menu_action(
-            menu,
-            "Settings",
-            lambda: self._show_placeholder("settings placeholder ready."),
-        )
-        self._add_menu_action(menu, "Reset Desktop", lambda: self._run_menu_command("/reset"))
+        self._add_menu_action(menu, "Help", lambda: self._run_menu_command("/help"))
         menu.addSeparator()
-        self._add_menu_action(menu, "Exit", self.exit_app)
+        self._add_menu_action(menu, "Quit", self.exit_app)
         return menu
 
     def _add_menu_action(self, menu: QMenu, label: str, callback: Callable[[], None]) -> QAction:
@@ -166,8 +164,15 @@ class ChaseOSTrayApp:
 def run(argv: Sequence[str] | None = None) -> int:
     """Run the ChaseOS tray shell."""
 
+    guard = SingleInstanceGuard()
+    if not guard.acquire():
+        print("ChaseOS is already running. Existing tray instance kept active.")
+        return 0
     app = QApplication(list(argv) if argv is not None else sys.argv)
     app.setApplicationName("ChaseOS")
     app.setQuitOnLastWindowClosed(False)
     tray_app = ChaseOSTrayApp(app)
-    return tray_app.start()
+    try:
+        return tray_app.start()
+    finally:
+        guard.release()

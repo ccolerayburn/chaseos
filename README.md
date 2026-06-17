@@ -587,6 +587,61 @@ Phase 15 safety notes:
 - Help, summary, status, doctor, diagnostics, smoke, export, verify, and dry-run commands
   do not change desktop wallpapers.
 
+## Windows Operation And Release Readiness
+
+Normal GUI launch:
+
+```powershell
+.\.venv\Scripts\python.exe -m chaseos
+```
+
+ChaseOS uses a per-user runtime lock so a second normal GUI launch does not create a
+second tray instance. Headless commands, scripts, and smoke modes still run normally.
+
+Startup shortcut status:
+
+```powershell
+.\.venv\Scripts\python.exe -m chaseos --command "/startup status"
+```
+
+Enable per-user startup:
+
+```powershell
+.\.venv\Scripts\python.exe -m chaseos --command "/startup enable"
+```
+
+Disable per-user startup:
+
+```powershell
+.\.venv\Scripts\python.exe -m chaseos --command "/startup disable"
+```
+
+Release info:
+
+```powershell
+.\.venv\Scripts\python.exe -m chaseos --command "/release info"
+```
+
+Release smoke:
+
+```powershell
+.\.venv\Scripts\python.exe -m chaseos --smoke release
+```
+
+Startup management uses only the current user's Startup folder shortcut:
+
+```text
+%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\ChaseOS.lnk
+```
+
+Phase 16 safety notes:
+
+- No registry Run keys.
+- No scheduled tasks.
+- No admin rights.
+- Release smoke is non-mutating.
+- Tray menu does not include apply/reset wallpaper actions.
+
 ## First-Run Readiness
 
 Refresh dependencies, including the Windows-only wallpaper API support:

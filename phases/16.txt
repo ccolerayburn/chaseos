@@ -1,0 +1,429 @@
+We are continuing the existing Windows desktop app project ChaseOS.
+
+Do not restart planning from scratch. Continue from completed Phases 1-15.
+
+Repo location:
+
+C:\_Codex\chaseos
+
+Recent commits:
+
+Phase 9:
+47271a7 Add safe per-monitor wallpaper application
+
+Phase 10:
+fd0c834 Add wallpaper diagnostics and preflight verification
+
+Phase 11:
+c5d8962 Add headless command runner and wallpaper smoke workflow
+
+Phase 12:
+07f6cd9 Add first-run readiness and asset preparation
+
+Phase 13:
+4089c8f Record phase 13 live wallpaper acceptance
+
+Phase 14:
+a0a1d9c Integrate daily startup ritual with asset preparation
+
+Phase 15:
+1525bfb Add operator help and redacted support export
+
+Current branch state:
+main is ahead of origin/main by 1 commit.
+
+Before implementing Phase 16, push the current Phase 15 commit:
+
+cd C:\_Codex\chaseos
+git status --short
+git push
+
+If push fails, report the reason and continue only if the working tree is clean.
+
+Current Phase 15 verification:
+- pytest: 249 passed
+- ruff check .: all checks passed
+- /help showed grouped operator help.
+- /help wallpapers documented dry-run, explicit confirm, and headless unlock.
+- /help safety documented raw check-in privacy and Display 1 photo rule.
+- /daily summary showed COMPLETE, assets generated, preflight passed, dry-run passed.
+- /export support --dry-run listed included/skipped files and created no zip.
+- /export support --redacted created a redacted zip and skipped images/private photos.
+- --smoke startup passed, generated assets, preflight passed, dry-run passed.
+- --smoke wallpapers passed status, diagnostics, verify, and dry-run.
+- No /apply wallpapers --confirm or /reset wallpapers command was run during Phase 15 verification.
+
+Important UX direction:
+- Keep the tray app and terminal-style command window.
+- Do not add a dashboard.
+- Do not add a visual theme preview.
+- Dark terminal style remains the main UI.
+- Commands remain text-based.
+- Keep the app simple and operator-friendly.
+
+Important privacy/safety rules:
+- No OpenAI calls.
+- No diagnosis.
+- No clinical labels.
+- Public poster must never include private check-in details.
+- Public Display 1 must never use general Lightroom/local photos.
+- Raw “How are you, really?” check-in text must not be persisted by default.
+- Persist only practical non-clinical signals and operational state.
+- Display 1 should use the approved/latest public poster when available.
+- Display 1 generated placeholder is fallback only.
+- Do not modify registry settings.
+- Do not restart Explorer.
+- Do not modify taskbar pins or icons.
+- Do not require admin rights.
+- Do not weaken the Phase 9/10/11/12/14/15 wallpaper safety gates.
+- Do not run /apply wallpapers --confirm during automated verification.
+- Do not run /reset wallpapers during automated verification.
+
+Known monitor layout:
+- Display 1: portrait public-facing monitor, 1080x1920, Daily Public Innovation Poster.
+- Display 4: landscape private monitor, Left Atmosphere wallpaper.
+- Display 2: landscape private monitor, Center Command wallpaper.
+- Display 3: landscape private monitor, Right Inspiration wallpaper.
+
+Local photo source:
+C:\_Media\Photos\Lightroom\Export
+
+Implement Phase 16: Windows startup/tray polish and packaging readiness.
+
+Goal:
+ChaseOS now works end-to-end. Phase 16 should improve day-to-day Windows operation and prepare for packaging without introducing risky system modifications. Add tray polish, single-instance behavior, safe Windows startup shortcut management, release metadata, and a non-mutating release smoke.
+
+Do not build a full installer in Phase 16.
+Do not add a dashboard.
+Do not redesign the UI.
+Do not change wallpaper safety behavior.
+Do not apply wallpapers automatically.
+
+Step 1: Confirm pushed/clean state
+
+Run:
+
+git status --short
+git log --oneline -5
+
+Confirm Phase 15 is pushed or report if not.
+
+Step 2: Add single-instance guard
+
+Add a Windows-safe single-instance guard so launching ChaseOS twice does not create multiple tray apps.
+
+Requirements:
+- Normal GUI launch should prevent a second full tray instance.
+- If a second GUI launch is attempted, it should either:
+  - bring/show the existing terminal window if practical, or
+  - exit cleanly with a clear message.
+- Headless modes must still work even if the GUI is already running:
+  - --command
+  - --script
+  - --smoke wallpapers
+  - --smoke startup
+- Do not require admin rights.
+- Prefer a lock file or named mutex approach that works on Windows.
+- Handle stale locks gracefully.
+
+Suggested path for a lock file if using file lock:
+
+%LOCALAPPDATA%\ChaseOS\runtime\chaseos.lock
+
+If using a Windows named mutex, use a ChaseOS-specific name.
+
+Add tests for stale lock handling where practical.
+
+Step 3: Add tray menu polish
+
+Inspect the existing PySide6 tray menu.
+
+Add or ensure tray actions:
+- Open ChaseOS
+- Start daily ritual
+- Daily status
+- Wallpaper dry-run
+- Wallpaper status
+- Help
+- Quit
+
+Behavior:
+- Open ChaseOS shows/focuses the terminal window.
+- Start daily ritual runs or injects /start into the terminal command flow.
+- Daily status runs /daily status and displays output in the terminal.
+- Wallpaper dry-run runs /apply wallpapers --dry-run and displays output.
+- Wallpaper status runs /wallpaper status and displays output.
+- Help runs /help and displays output.
+- Quit exits cleanly.
+
+Do not add tray actions that apply wallpapers.
+Do not add tray actions that reset wallpapers.
+Do not add tray actions that modify monitor mapping.
+Do not create desktop notifications unless already supported cleanly.
+
+Step 4: Add safe Windows startup shortcut management
+
+Add commands:
+
+/startup status
+/startup enable
+/startup disable
+
+These commands should manage a per-user Windows Startup folder shortcut only.
+
+Startup folder target:
+
+%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup
+
+Shortcut name:
+
+ChaseOS.lnk
+
+Behavior:
+- /startup status reports whether the shortcut exists and what it points to.
+- /startup enable creates or updates the shortcut to launch ChaseOS normally.
+- /startup disable removes the shortcut if present.
+- No admin rights required.
+- Do not modify registry Run keys.
+- Do not create scheduled tasks.
+- Do not modify system-wide startup.
+- Do not touch taskbar pins/icons.
+
+Shortcut target:
+- Prefer the active venv pythonw.exe or python.exe if the project is still source-run based.
+- Use pythonw.exe if available to avoid a console window.
+- Arguments should launch:
+  -m chaseos
+
+Working directory should be:
+C:\_Codex\chaseos
+
+If creating .lnk files requires a dependency, prefer using Windows COM via pywin32 only if already available. If not available, use a minimal PowerShell or COM approach without adding heavy dependencies. Keep it robust and tested with abstraction/mocking.
+
+The command should clearly report:
+- shortcut created/updated/removed
+- target path
+- arguments
+- working directory
+- no registry changes
+
+Step 5: Add packaging metadata command
+
+Add:
+
+/release info
+
+It must work in GUI and headless mode:
+
+.\.venv\Scripts\python.exe -m chaseos --command "/release info"
+
+Output should include:
+- App name
+- Package version
+- Python version
+- Platform
+- Project root
+- App data root
+- Current git commit if available
+- Dirty working tree yes/no if available
+- Installed dependency versions:
+  - PySide6
+  - Pillow
+  - comtypes on Windows
+- Supported launch modes:
+  - GUI tray
+  - headless command
+  - script
+  - smoke wallpapers
+  - smoke startup
+- Safety summary:
+  - wallpaper apply explicit only
+  - startup shortcut per-user only
+  - no registry startup keys
+  - no admin required
+
+Do not fail if git is unavailable. Report unknown.
+
+Step 6: Add release smoke mode
+
+Add:
+
+.\.venv\Scripts\python.exe -m chaseos --smoke release
+
+This should run only non-mutating commands:
+- /version
+- /doctor
+- /release info
+- /startup status
+- /daily status
+- /assets status
+- /wallpaper status
+- /verify wallpapers
+- /apply wallpapers --dry-run
+- /export support --dry-run
+
+Do not run:
+- /startup enable
+- /startup disable
+- /apply wallpapers --confirm
+- /reset wallpapers
+- any monitor assignment command
+- any photo indexing command unless already non-mutating and safe
+
+Write reports:
+
+%LOCALAPPDATA%\ChaseOS\release\last_release_smoke.txt
+%LOCALAPPDATA%\ChaseOS\release\last_release_smoke.json
+
+JSON fields:
+- started_at
+- completed_at
+- commands
+- per-command status
+- per-command output
+- aggregate_status
+- exit_code
+- no wallpaper changes applied
+- no startup changes applied
+
+Step 7: Add example release smoke script
+
+Create:
+
+examples/release_smoke.txt
+
+Contents:
+
+# ChaseOS non-mutating release smoke
+/version
+/doctor
+/release info
+/startup status
+/daily status
+/assets status
+/wallpaper status
+/verify wallpapers
+/apply wallpapers --dry-run
+/export support --dry-run
+
+No mutating commands.
+
+Step 8: Improve README
+
+Add Phase 16 section:
+
+Windows operation and release readiness
+
+Document:
+- Normal GUI launch:
+  .\.venv\Scripts\python.exe -m chaseos
+
+- Startup shortcut status:
+  .\.venv\Scripts\python.exe -m chaseos --command "/startup status"
+
+- Enable per-user startup:
+  .\.venv\Scripts\python.exe -m chaseos --command "/startup enable"
+
+- Disable per-user startup:
+  .\.venv\Scripts\python.exe -m chaseos --command "/startup disable"
+
+- Release info:
+  .\.venv\Scripts\python.exe -m chaseos --command "/release info"
+
+- Release smoke:
+  .\.venv\Scripts\python.exe -m chaseos --smoke release
+
+Document:
+- Startup management uses only the per-user Startup folder shortcut.
+- No registry Run keys.
+- No scheduled tasks.
+- No admin rights.
+- Release smoke is non-mutating.
+- Tray menu does not include apply/reset wallpaper actions.
+
+Step 9: Update AGENTS.md
+
+Add Phase 16 guardrails:
+- Single-instance guard must not block headless commands.
+- Startup management must use per-user Startup folder shortcut only.
+- Do not use registry Run keys.
+- Do not create scheduled tasks.
+- Do not require admin.
+- Do not modify taskbar pins/icons.
+- Tray menu must not include wallpaper apply/reset actions.
+- Release smoke must be non-mutating.
+- Do not weaken wallpaper safety gates.
+- Do not call OpenAI.
+
+Step 10: Tests
+
+Add unit tests. Do not touch real wallpaper state or real startup folder unless safely abstracted/mocked.
+
+Minimum tests:
+- Second GUI launch is blocked or handled by single-instance guard.
+- Headless command is not blocked by single-instance guard.
+- Stale lock is handled if using lock file.
+- Tray menu contains safe expected actions if testable.
+- Tray menu does not contain apply/reset wallpaper actions.
+- /startup status reports missing shortcut.
+- /startup enable creates shortcut through mocked shortcut backend.
+- /startup disable removes shortcut through mocked shortcut backend.
+- /startup commands do not use registry backend.
+- /release info includes app/version/platform/dependency sections.
+- /release info handles missing git gracefully.
+- --smoke release runs expected non-mutating command list.
+- --smoke release does not run startup enable/disable.
+- --smoke release does not run apply confirm/reset.
+- --smoke release writes last_release_smoke.txt.
+- --smoke release writes last_release_smoke.json.
+- Existing Phase 9, 10, 11, 12, 14, and 15 tests still pass.
+
+Step 11: Verification
+
+Run:
+
+cd C:\_Codex\chaseos
+.\.venv\Scripts\python.exe -m pytest
+.\.venv\Scripts\python.exe -m ruff check .
+
+Run non-mutating headless checks:
+
+.\.venv\Scripts\python.exe -m chaseos --command "/release info"
+.\.venv\Scripts\python.exe -m chaseos --command "/startup status"
+.\.venv\Scripts\python.exe -m chaseos --smoke release
+.\.venv\Scripts\python.exe -m chaseos --smoke startup
+.\.venv\Scripts\python.exe -m chaseos --smoke wallpapers
+
+Do not run automatically:
+.\.venv\Scripts\python.exe -m chaseos --command "/startup enable"
+.\.venv\Scripts\python.exe -m chaseos --command "/startup disable"
+.\.venv\Scripts\python.exe -m chaseos --command "/apply wallpapers --confirm" --allow-desktop-changes
+.\.venv\Scripts\python.exe -m chaseos --command "/reset wallpapers" --allow-desktop-changes
+
+Startup enable/disable are real system user-profile changes and should be manually user-approved later.
+
+Step 12: Commit
+
+After implementation and passing checks:
+
+git add .
+git commit -m "Add Windows operation and release readiness polish"
+
+Report:
+- Whether Phase 15 was pushed.
+- Files changed.
+- Commands added or changed.
+- Single-instance strategy used.
+- Startup shortcut backend used.
+- Whether startup enable/disable were tested only with mocks or actually run.
+- Release smoke report paths.
+- Test result.
+- Ruff result.
+- Summary from:
+  - /release info
+  - /startup status
+  - --smoke release
+  - --smoke startup
+  - --smoke wallpapers
+- Confirm that no wallpaper apply/reset command was run.
+- Confirm that startup enable/disable were not run unless explicitly user-approved.
