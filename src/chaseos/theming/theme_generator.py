@@ -72,7 +72,7 @@ class ThemeGenerator:
         motion = self._motion(mode, density, body_load, changes)
         photo_usage = self._photo_usage(signals, mode, changes)
         monitor_plan = MonitorThemePlan(
-            display_1="public innovation poster",
+            display_1="public generated art",
             display_4=f"left atmosphere, {_usage_label(photo_usage.display_4)}",
             display_2="center command, generated minimal",
             display_3=f"right inspiration, {_usage_label(photo_usage.display_3)} cyberpunk",
@@ -146,16 +146,32 @@ class ThemeGenerator:
             ),
         }
         candidates = by_mode[mode]
-        if _has_change(changes, "calmer", "more calm", "tone it down", "less intense"):
-            candidates = (ThemeFamily.SYNTH_SANCTUARY, ThemeFamily.ARCTIC_INTERFACE)
+        if _has_change(changes, "ff7", "mako"):
+            candidates = (ThemeFamily.MAKO_REACTOR,)
+        elif _has_change(changes, "lofi"):
+            candidates = (ThemeFamily.LOFI_DUSK,)
+        elif _has_change(changes, "calmer", "more calm", "tone it down", "less intense"):
+            candidates = (
+                ThemeFamily.LOFI_DUSK,
+                ThemeFamily.SYNTH_SANCTUARY,
+                ThemeFamily.ARCTIC_INTERFACE,
+            )
         elif _has_change(changes, "more cyberpunk", "more futuristic", "more neon") and not (
             body_load or pressure_high
         ):
-            candidates = (ThemeFamily.NEON_NOIR, ThemeFamily.VIOLET_CIRCUIT)
+            candidates = (
+                ThemeFamily.DUSK_SKYLINE,
+                ThemeFamily.NEON_NOIR,
+                ThemeFamily.VIOLET_CIRCUIT,
+            )
         return candidates[regenerate_count % len(candidates)]
 
     def _colors(self, family: ThemeFamily, changes: tuple[str, ...]) -> ThemeColors:
         colors = THEME_PALETTES[family]["colors"].model_copy()
+        if _has_change(changes, "ff7", "mako"):
+            colors = THEME_PALETTES[ThemeFamily.MAKO_REACTOR]["colors"].model_copy()
+        if _has_change(changes, "lofi"):
+            colors = THEME_PALETTES[ThemeFamily.LOFI_DUSK]["colors"].model_copy()
         if _has_change(changes, "more yellow"):
             colors.primary = "#c6a452"
             colors.accent = "#d6a73d"
@@ -197,7 +213,7 @@ class ThemeGenerator:
             base = min(base, 0.35)
         if _has_change(changes, "calmer", "more calm", "tone it down", "less intense"):
             base = max(0.12, base - 0.18)
-        if _has_change(changes, "more cyberpunk", "more futuristic", "more neon"):
+        if _has_change(changes, "more cyberpunk", "more futuristic", "more neon", "more geometry"):
             cap = (
                 0.45
                 if self._has_body_load(signals) or signals.pressure == PressureLevel.HIGH
@@ -224,7 +240,9 @@ class ThemeGenerator:
             density = VisualDensity.VERY_SPARSE
         if _has_change(changes, "less visual noise", "more minimal", "calmer", "tone it down"):
             density = VisualDensity.VERY_SPARSE
-        if _has_change(changes, "more cyberpunk", "more neon") and not self._has_body_load(signals):
+        if _has_change(
+            changes, "more cyberpunk", "more neon", "more geometry"
+        ) and not self._has_body_load(signals):
             density = VisualDensity.MEDIUM
         return density
 
@@ -275,8 +293,12 @@ class ThemeGenerator:
     def _icon_style(self, family: ThemeFamily, changes: tuple[str, ...]) -> str:
         if _has_change(changes, "more yellow"):
             return "thin-line amber/gold"
-        if family in {ThemeFamily.NEON_NOIR, ThemeFamily.VIOLET_CIRCUIT}:
+        if family in {ThemeFamily.NEON_NOIR, ThemeFamily.VIOLET_CIRCUIT, ThemeFamily.DUSK_SKYLINE}:
             return "thin-line violet/cyan"
+        if family == ThemeFamily.MAKO_REACTOR:
+            return "thin-line mako teal/amber"
+        if family == ThemeFamily.LOFI_DUSK:
+            return "thin-line warm amber/cool blue"
         if family == ThemeFamily.REDLINE_PROTOCOL:
             return "thin-line amber/red"
         return "thin-line amber/cyan"
@@ -296,6 +318,10 @@ class ThemeGenerator:
             notes.append("pressure is elevated, so redline styling is disabled.")
         if body_load:
             notes.append("body load is present, so density and motion are reduced.")
+        if family == ThemeFamily.MAKO_REACTOR:
+            notes.append("mako teal-green accents are available for Display 1 art.")
+        if family == ThemeFamily.LOFI_DUSK:
+            notes.append("lofi dusk warmth is available for Display 1 art.")
         if family == ThemeFamily.REDLINE_PROTOCOL:
             notes.append("redline accents are used only because pressure is not high.")
         if _has_change(changes, "use more local photos", "more local photos") and body_load:
@@ -306,6 +332,5 @@ class ThemeGenerator:
 
     def _has_body_load(self, signals: PracticalSignals) -> bool:
         return any(
-            item in signals.body_context
-            for item in ("headache", "sensory_load", "pain", "sick")
+            item in signals.body_context for item in ("headache", "sensory_load", "pain", "sick")
         )

@@ -21,10 +21,10 @@ from chaseos.models.monitor import (
     MonitorRole,
     resolve_monitor_role,
 )
-from chaseos.models.poster import PublicPosterPlan, PublicPosterRenderResult
+from chaseos.models.poster import Display1ArtPlan, PublicPosterRenderResult
 from chaseos.models.signals import PracticalSignals, StartupMode
 from chaseos.models.theme import ThemePlan
-from chaseos.poster.public_poster_engine import PublicPosterEngine
+from chaseos.poster.art_engine import Display1ArtEngine
 from chaseos.ritual.prompts import (
     APPLYING_LINES,
     CHECK_IN_PROMPT,
@@ -81,7 +81,7 @@ class RitualSession:
     theme_plan: ThemePlan | None = None
     public_safe_takeaway: str | None = None
     public_quote: str | None = None
-    poster_plan: PublicPosterPlan | None = None
+    poster_plan: Display1ArtPlan | None = None
     poster_render_result: PublicPosterRenderResult | None = None
     private_wallpaper_manifest: WallpaperManifest | None = None
     private_wallpaper_paths: dict[str, Path] = field(default_factory=dict)
@@ -141,7 +141,7 @@ class StartupSequence:
         self.session = RitualSession()
         self.interpreter = LocalCheckInInterpreter()
         self.theme_generator = ThemeGenerator()
-        self.poster_engine = PublicPosterEngine(base_path=self.data_dir)
+        self.poster_engine = Display1ArtEngine(base_path=self.data_dir)
         self.photo_config = photo_config or PhotoSourceConfig()
         self.photo_indexer = PhotoLibraryIndexer(config=self.photo_config, base_path=self.data_dir)
         self.monitor_mapping_store = MonitorMappingStore(base_path=self.data_dir)
@@ -206,6 +206,12 @@ class StartupSequence:
             return SequenceResponse(_chaseos_lines(self.startup_shortcuts.enable_lines()))
         if result.command == "/startup disable":
             return SequenceResponse(_chaseos_lines(self.startup_shortcuts.disable_lines()))
+        if result.command == "/install shortcut":
+            return SequenceResponse(_chaseos_lines(self.startup_shortcuts.install_shortcut_lines()))
+        if result.command == "/uninstall shortcut":
+            return SequenceResponse(
+                _chaseos_lines(self.startup_shortcuts.uninstall_shortcut_lines())
+            )
         if result.command == "/release info":
             return SequenceResponse(_chaseos_lines(self.release_info.lines()))
         if result.command == "/resume":
@@ -420,7 +426,7 @@ class StartupSequence:
         lines = [*self.session.current_poster_plan.splitlines()]
         lines.extend(
             (
-                "approve poster, change quote, or regenerate?",
+                "approve art, change style, or regenerate?",
                 "commands: /approve, /change <request>, /regenerate, /poster, /skip",
             )
         )
@@ -433,7 +439,7 @@ class StartupSequence:
             self.session.current_stage = RitualStage.WORK_RAMP
             self.save_daily_session()
             lines = [
-                f"poster rendered: {render_result.image_path}",
+                f"display 1 art rendered: {render_result.image_path}",
                 f"metadata saved: {render_result.metadata_path}",
                 *WORK_RAMP_LINES,
             ]
@@ -442,18 +448,18 @@ class StartupSequence:
         if result.command == "/change":
             if not result.change_request:
                 return SequenceResponse(
-                    (TerminalLine("chaseos", "poster change missing. try /change sharper quote."),)
+                    (TerminalLine("chaseos", "art change missing. try /change more geometry."),)
                 )
             self.session.poster_change_requests.append(result.change_request)
             self.session.current_poster_plan = self.build_poster_plan(revised=True)
             self.save_daily_session()
             lines = [
-                "poster change request recorded.",
+                "art change request recorded.",
                 *self.session.current_poster_plan.splitlines(),
             ]
             lines.extend(
                 (
-                    "approve poster, change quote, or regenerate?",
+                    "approve art, change style, or regenerate?",
                     "commands: /approve, /change <request>, /regenerate, /poster, /skip",
                 )
             )
@@ -463,10 +469,10 @@ class StartupSequence:
             self.session.poster_regenerate_count += 1
             self.session.current_poster_plan = self.build_poster_plan()
             self.save_daily_session()
-            lines = ["poster plan regenerated.", *self.session.current_poster_plan.splitlines()]
+            lines = ["art plan regenerated.", *self.session.current_poster_plan.splitlines()]
             lines.extend(
                 (
-                    "approve poster, change quote, or regenerate?",
+                    "approve art, change style, or regenerate?",
                     "commands: /approve, /change <request>, /regenerate, /poster, /skip",
                 )
             )
@@ -539,7 +545,7 @@ class StartupSequence:
         )
         self.session.poster_plan = plan
         self.session.public_safe_takeaway = plan.public_safe_takeaway
-        self.session.public_quote = plan.quote
+        self.session.public_quote = None
         return self.poster_engine.describe_plan(plan)
 
     def render_current_poster(self) -> PublicPosterRenderResult:
@@ -807,7 +813,7 @@ class StartupSequence:
         )
         return [
             "WALLPAPER OUTPUTS",
-            f"display 1 -> public poster: {public_poster}",
+            f"display 1 -> public generated art: {public_poster}",
             f"display 4 -> left atmosphere: {manifest.wallpapers['display_4'].image_path}",
             f"display 2 -> center command: {manifest.wallpapers['display_2'].image_path}",
             f"display 3 -> right inspiration: {manifest.wallpapers['display_3'].image_path}",
@@ -822,7 +828,7 @@ class StartupSequence:
     def poster_lines_or_placeholder(self) -> tuple[TerminalLine, ...]:
         if not self.session.current_poster_plan:
             return (
-                TerminalLine("chaseos", "no poster plan yet. complete the innovation step first."),
+                TerminalLine("chaseos", "no art plan yet. complete the innovation step first."),
             )
         return _chaseos_lines(tuple(self.session.current_poster_plan.splitlines()))
 
@@ -914,7 +920,7 @@ class StartupSequence:
             f"practical signals: {_signals_summary(record.practical_signals)}",
             f"innovation takeaway: {record.innovation_takeaway or 'not recorded'}",
             f"assets generated: {_yes_no(assets_generated)}",
-            f"poster path: {poster_path or 'not generated'}",
+            f"display 1 art path: {poster_path or 'not generated'}",
             f"wallpaper manifest: {record.wallpaper_manifest_path or 'not generated'}",
             f"preflight status: {record.preflight_status or 'not run'}",
             f"dry-run status: {record.dry_run_status or 'not run'}",
@@ -1136,9 +1142,7 @@ class StartupSequence:
         ):
             assignment = config.assignments.get(role)
             target = (
-                assignment.display_label or assignment.stable_id
-                if assignment
-                else "unassigned"
+                assignment.display_label or assignment.stable_id if assignment else "unassigned"
             )
             lines.append(f"{ROLE_DISPLAY_NAMES[role]} .... {target}")
         lines.append("wallpaper application is not enabled in phase 8.")
@@ -1241,7 +1245,7 @@ class StartupSequence:
                 f"elapsed time: {self.timer.elapsed_label}",
                 f"remaining target time: {self.timer.remaining_label}",
                 f"ritual active: {active}",
-                f"public poster generated: {'yes' if self.session.poster_render_result else 'no'}",
+                f"public art generated: {'yes' if self.session.poster_render_result else 'no'}",
                 (
                     "private wallpapers generated: "
                     f"{'yes' if self.session.private_wallpapers_generated else 'no'}"

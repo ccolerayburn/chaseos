@@ -35,7 +35,7 @@ def test_full_text_only_ritual_flow_without_gui(tmp_path) -> None:
         "we keep repeating the same troubleshooting questions"
     )
     assert sequence.session.raw_check_in not in sequence.session.current_poster_plan
-    assert sequence.session.current_poster_plan.startswith("PUBLIC POSTER PLAN")
+    assert sequence.session.current_poster_plan.startswith("DISPLAY 1 ART PLAN")
     assert sequence.session.poster_render_result is not None
     assert sequence.session.poster_render_result.image_path.exists()
     assert sequence.session.private_wallpapers_generated is True

@@ -16,6 +16,9 @@ class ThemeFamily(StrEnum):
     ARCTIC_INTERFACE = "Arctic Interface"
     SYNTH_SANCTUARY = "Synth Sanctuary"
     SYNTHETIC_SUNRISE = "Synthetic Sunrise"
+    DUSK_SKYLINE = "Dusk Skyline"
+    MAKO_REACTOR = "Mako Reactor"
+    LOFI_DUSK = "Lofi Dusk"
 
 
 class VisualDensity(StrEnum):
@@ -53,7 +56,7 @@ class LocalPhotoUsage(BaseModel):
 
 
 class MonitorThemePlan(BaseModel):
-    display_1: str = "public innovation poster"
+    display_1: str = "public generated art"
     display_4: str = "left atmosphere"
     display_2: str = "center command"
     display_3: str = "right inspiration"

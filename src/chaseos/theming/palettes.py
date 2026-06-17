@@ -97,4 +97,37 @@ THEME_PALETTES = {
             text="#dbc8b7",
         ),
     },
+    ThemeFamily.DUSK_SKYLINE: {
+        "label": "deep indigo / magenta dusk / amber cyan skyline",
+        "colors": ThemeColors(
+            background="#0d1238",
+            surface="#47205c",
+            primary="#bc4658",
+            secondary="#2fcad6",
+            accent="#eb5b39",
+            text="#f2b452",
+        ),
+    },
+    ThemeFamily.MAKO_REACTOR: {
+        "label": "steel blue / mako teal / reactor amber",
+        "colors": ThemeColors(
+            background="#081521",
+            surface="#113c3e",
+            primary="#499669",
+            secondary="#43d2cd",
+            accent="#70e69b",
+            text="#edb956",
+        ),
+    },
+    ThemeFamily.LOFI_DUSK: {
+        "label": "cool window dusk / lamp amber / soft rose",
+        "colors": ThemeColors(
+            background="#182341",
+            surface="#4a3f60",
+            primary="#cf7e55",
+            secondary="#5cb1c2",
+            accent="#f57a4b",
+            text="#f5bb5f",
+        ),
+    },
 }

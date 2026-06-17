@@ -27,6 +27,8 @@ def test_phase_two_commands_are_reserved() -> None:
     assert "/daily" in KNOWN_COMMANDS
     assert "/export" in KNOWN_COMMANDS
     assert "/startup" in KNOWN_COMMANDS
+    assert "/install" in KNOWN_COMMANDS
+    assert "/uninstall" in KNOWN_COMMANDS
     assert "/release" in KNOWN_COMMANDS
     assert "/photos" in KNOWN_COMMANDS
     assert "/index" in KNOWN_COMMANDS
@@ -63,7 +65,7 @@ def test_help_safety_mentions_public_and_raw_check_in_privacy() -> None:
     text = "\n".join(line.text for line in route_command("/help safety").lines)
 
     assert "Raw check-in text is not persisted by default." in text
-    assert "Display 1 never uses general Lightroom/local photos." in text
+    assert "Display 1 generated art has no readable text and no general local photos." in text
 
 
 def test_version_is_recognized() -> None:
@@ -291,6 +293,14 @@ def test_startup_commands_are_recognized() -> None:
     assert status.command == "/startup status"
     assert enable.command == "/startup enable"
     assert disable.command == "/startup disable"
+
+
+def test_shortcut_install_commands_are_recognized() -> None:
+    install = route_command("/install shortcut")
+    uninstall = route_command("/uninstall shortcut")
+
+    assert install.command == "/install shortcut"
+    assert uninstall.command == "/uninstall shortcut"
 
 
 def test_release_info_command_is_recognized() -> None:

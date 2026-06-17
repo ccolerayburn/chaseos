@@ -48,6 +48,8 @@ KNOWN_COMMANDS = (
     "/daily",
     "/export",
     "/startup",
+    "/install",
+    "/uninstall",
     "/release",
     "/resume",
     "/clear",
@@ -91,9 +93,10 @@ HELP_TOPICS: dict[str, tuple[str, ...]] = {
         "",
         "Theme and approval",
         "  /approve, /skip - advance the active ritual step",
-        "  /change <text> - request a theme or poster adjustment",
+        "  /change <text> - request a theme or Display 1 art adjustment",
         "  /regenerate - regenerate the active plan",
         "  /theme, /poster, /wallpapers - show current plans or paths",
+        "  art changes: more cyberpunk, lofi, mako, darker, brighter, more geometry",
         "",
         "Daily assets",
         "  /assets status - check generated asset readiness",
@@ -117,13 +120,14 @@ HELP_TOPICS: dict[str, tuple[str, ...]] = {
         "  /doctor, /status, /version, /release info",
         "  /export support --dry-run, /export support --redacted",
         "  /startup status - inspect per-user Startup shortcut",
+        "  /install shortcut - create a Start Menu shortcut for taskbar pinning",
         "",
         "Headless usage",
-        "  python -m chaseos --command \"/daily status\"",
+        '  python -m chaseos --command "/daily status"',
         "  python -m chaseos --smoke startup",
         "",
         "Safety notes",
-        "  Display 1 never uses general Lightroom/local photos.",
+        "  Display 1 generated art has no readable text; no general Lightroom/local photos.",
         "  Raw check-in text is not persisted by default.",
         "  Help, status, diagnostics, smoke, export, verify, and dry-run do not apply.",
     ),
@@ -158,13 +162,13 @@ HELP_TOPICS: dict[str, tuple[str, ...]] = {
         "/photos prints local photo source and index status.",
         "/index photos indexes the private Lightroom export folder locally.",
         "/photo source prints the configured source.",
-        "Display 1 never uses general Lightroom/local photos.",
+        "Display 1 generated art has no readable text and no general local photos.",
     ),
     "headless": (
         "CHASEOS // HELP HEADLESS",
-        "python -m chaseos --command \"/help wallpapers\"",
-        "python -m chaseos --command \"/daily summary\"",
-        "python -m chaseos --command \"/export support --dry-run\"",
+        'python -m chaseos --command "/help wallpapers"',
+        'python -m chaseos --command "/daily summary"',
+        'python -m chaseos --command "/export support --dry-run"',
         "python -m chaseos --smoke startup",
         "Live apply requires --allow-desktop-changes and explicit confirm.",
     ),
@@ -172,7 +176,7 @@ HELP_TOPICS: dict[str, tuple[str, ...]] = {
         "CHASEOS // HELP SAFETY",
         "Raw check-in text is not persisted by default.",
         "Daily status and summary use practical non-clinical signals only.",
-        "Display 1 never uses general Lightroom/local photos.",
+        "Display 1 generated art has no readable text and no general local photos.",
         "/prepare, /verify, /apply --dry-run, smoke, help, status, and export do not apply.",
         "/apply wallpapers --confirm is the explicit live apply command.",
         "No OpenAI calls, admin rights, registry edits, or Explorer restarts.",
@@ -254,6 +258,20 @@ class CommandRouter:
                 argument=argument,
                 lines=(TerminalLine("chaseos", f"startup {argument} command recognized."),),
             )
+        if command == "/install" and argument == "shortcut":
+            return CommandResult(
+                action="respond",
+                command="/install shortcut",
+                argument=argument,
+                lines=(TerminalLine("chaseos", "install shortcut command recognized."),),
+            )
+        if command == "/uninstall" and argument == "shortcut":
+            return CommandResult(
+                action="respond",
+                command="/uninstall shortcut",
+                argument=argument,
+                lines=(TerminalLine("chaseos", "uninstall shortcut command recognized."),),
+            )
         if command == "/release" and argument == "info":
             return CommandResult(
                 action="respond",
@@ -305,7 +323,7 @@ class CommandRouter:
             return CommandResult(
                 action="respond",
                 command=command,
-                lines=(TerminalLine("chaseos", "public-poster placeholder ready."),),
+                lines=(TerminalLine("chaseos", "display 1 art placeholder ready."),),
             )
         if command == "/approve":
             return CommandResult(

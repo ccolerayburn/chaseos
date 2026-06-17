@@ -184,7 +184,7 @@ def test_poster_plan_does_not_include_raw_check_in() -> None:
 
     assert sequence.session.raw_check_in is not None
     assert sequence.session.raw_check_in not in sequence.session.current_poster_plan
-    assert "innovation takeaway only" in sequence.session.current_poster_plan
+    assert "innovation takeaway seed only" in sequence.session.current_poster_plan
 
 
 def test_after_innovation_takeaway_reaches_poster_approval_with_real_plan() -> None:
@@ -193,7 +193,7 @@ def test_after_innovation_takeaway_reaches_poster_approval_with_real_plan() -> N
 
     assert sequence.current_stage == RitualStage.POSTER_APPROVAL
     assert sequence.session.poster_plan is not None
-    assert sequence.session.current_poster_plan.startswith("PUBLIC POSTER PLAN")
+    assert sequence.session.current_poster_plan.startswith("DISPLAY 1 ART PLAN")
     assert "safe ............ yes" in sequence.session.current_poster_plan
 
 
@@ -204,24 +204,22 @@ def test_poster_command_prints_current_real_poster_plan() -> None:
     response = sequence.handle_input("/poster")
     text = render_response_text(response)
 
-    assert "PUBLIC POSTER PLAN" in text
+    assert "DISPLAY 1 ART PLAN" in text
     assert "display ......... 1" in text
 
 
-def test_change_quote_shorter_records_change_and_updates_plan() -> None:
+def test_change_more_geometry_records_change_and_updates_art_plan() -> None:
     sequence = StartupSequence()
     advance_to_poster_approval(sequence)
-    original_quote = sequence.session.public_quote
+    original_plan = sequence.session.poster_plan
 
-    response = sequence.handle_input("/change quote shorter")
+    response = sequence.handle_input("/change more geometry")
 
-    assert sequence.session.poster_change_requests == ["quote shorter"]
-    assert sequence.session.public_quote is not None
-    assert len(sequence.session.public_quote.split()) <= 5
-    assert (
-        sequence.session.public_quote != original_quote
-        or "poster change" in render_response_text(response)
-    )
+    assert sequence.session.poster_change_requests == ["more geometry"]
+    assert sequence.session.poster_plan is not None
+    assert sequence.session.poster_plan != original_plan
+    assert sequence.session.poster_plan.show_geometry is True
+    assert "art change" in render_response_text(response)
 
 
 def test_poster_regenerate_increments_count() -> None:
@@ -824,14 +822,7 @@ def test_poster_rendered_text_does_not_contain_raw_check_in(tmp_path) -> None:
     sequence.handle_input("/approve")
 
     assert sequence.session.poster_plan is not None
-    rendered_text = " ".join(
-        part
-        for part in (
-            sequence.session.poster_plan.quote,
-            sequence.session.poster_plan.subtitle or "",
-            sequence.session.poster_plan.public_safe_takeaway,
-        )
-    )
+    rendered_text = " ".join(part for part in (sequence.session.poster_plan.public_safe_takeaway,))
     assert raw_check_in not in rendered_text
 
 

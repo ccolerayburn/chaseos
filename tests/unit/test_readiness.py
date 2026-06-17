@@ -94,7 +94,7 @@ def test_doctor_treats_missing_assets_as_warning_not_crash(tmp_path, monkeypatch
 
     text = "\n".join(ReadinessService(base_path=tmp_path).doctor_lines())
 
-    assert "Public poster: WARN missing" in text
+    assert "Display 1 art: WARN missing" in text
     assert "Generated manifest: WARN missing" in text
 
 
@@ -138,7 +138,7 @@ def test_prepare_wallpapers_fails_when_no_takeaway_is_provided(tmp_path) -> None
 def test_prepare_wallpapers_accepts_takeaway_text(tmp_path) -> None:
     text = "\n".join(
         ReadinessService(base_path=tmp_path).prepare_wallpapers_lines(
-            "--takeaway \"A useful small improvement\""
+            '--takeaway "A useful small improvement"'
         )
     )
 
@@ -150,9 +150,7 @@ def test_prepare_wallpapers_accepts_takeaway_file(tmp_path) -> None:
     takeaway.write_text("A useful small improvement", encoding="utf-8")
 
     text = "\n".join(
-        ReadinessService(base_path=tmp_path).prepare_wallpapers_lines(
-            f"--takeaway-file {takeaway}"
-        )
+        ReadinessService(base_path=tmp_path).prepare_wallpapers_lines(f"--takeaway-file {takeaway}")
     )
 
     assert f"Innovation takeaway source: {takeaway}" in text
@@ -172,7 +170,7 @@ def test_prepare_wallpapers_prefers_takeaway_file_when_both_are_provided(tmp_pat
     assert f"Innovation takeaway source: {takeaway}" in text
 
 
-def test_prepare_wallpapers_writes_public_poster_private_wallpapers_and_manifest(tmp_path) -> None:
+def test_prepare_wallpapers_writes_display_one_art_and_manifest(tmp_path) -> None:
     text = "\n".join(
         ReadinessService(base_path=tmp_path).prepare_wallpapers_lines(
             "--takeaway A useful small improvement"
@@ -180,7 +178,7 @@ def test_prepare_wallpapers_writes_public_poster_private_wallpapers_and_manifest
     )
     manifest = ReadinessService(base_path=tmp_path).planner.latest_wallpaper_manifest()
 
-    assert "Public poster:" in text
+    assert "Display 1 art:" in text
     assert manifest is not None
     assert manifest.public_poster_path is not None
     assert manifest.public_poster_path.exists()

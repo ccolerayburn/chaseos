@@ -61,10 +61,10 @@ def test_headache_sensory_lowers_intensity_and_density() -> None:
     assert result.plan.visual_density == VisualDensity.VERY_SPARSE
 
 
-def test_display_one_is_always_public_innovation_poster() -> None:
+def test_display_one_is_always_public_generated_art() -> None:
     result = generate(PracticalSignals(), StartupMode.STRUCTURED)
 
-    assert result.plan.monitor_plan.display_1 == "public innovation poster"
+    assert result.plan.monitor_plan.display_1 == "public generated art"
 
 
 def test_display_two_is_generated_minimal_by_default() -> None:
@@ -107,7 +107,7 @@ def test_change_use_more_local_photos_affects_private_side_displays_only() -> No
     assert result.plan.local_photo_usage.display_4 == PhotoUsage.HYBRID
     assert result.plan.local_photo_usage.display_3 == PhotoUsage.LOCAL_PHOTO
     assert result.plan.local_photo_usage.display_2 == PhotoUsage.GENERATED
-    assert result.plan.monitor_plan.display_1 == "public innovation poster"
+    assert result.plan.monitor_plan.display_1 == "public generated art"
 
 
 def test_change_no_photos_today_makes_private_displays_generated() -> None:

@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import ctypes
 import sys
 from collections.abc import Callable, Sequence
+from contextlib import suppress
+from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QAction, QColor, QIcon, QPainter, QPixmap
@@ -47,15 +50,30 @@ def create_fallback_icon() -> QIcon:
     return QIcon(pixmap)
 
 
+def set_app_user_model_id() -> None:
+    with suppress(Exception):
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("ChaseCole.ChaseOS")
+
+
+def app_icon() -> QIcon:
+    icon_path = Path(__file__).resolve().parents[1] / "assets" / "chaseos.ico"
+    if icon_path.exists():
+        return QIcon(str(icon_path))
+    return create_fallback_icon()
+
+
 class ChaseOSTrayApp:
     """Owns the terminal window, command router, and Windows tray icon."""
 
     def __init__(self, app: QApplication) -> None:
+        set_app_user_model_id()
         self.app = app
         self.state = AppState()
         self.router = CommandRouter()
         self.window = TerminalWindow(self.state)
-        self.tray = QSystemTrayIcon(create_fallback_icon(), self.app)
+        icon = app_icon()
+        self.app.setWindowIcon(icon)
+        self.tray = QSystemTrayIcon(icon, self.app)
         self.tray.setToolTip("ChaseOS")
         self.tray.activated.connect(self._handle_tray_activation)
         self.tray.setContextMenu(self._build_tray_menu())

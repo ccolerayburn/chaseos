@@ -15,7 +15,7 @@ from chaseos import __version__
 from chaseos.models.assets import WallpaperManifest
 from chaseos.models.signals import PracticalSignals, StartupMode
 from chaseos.models.theme import ThemePlan
-from chaseos.poster.public_poster_engine import PublicPosterEngine
+from chaseos.poster.art_engine import Display1ArtEngine
 from chaseos.storage.paths import (
     get_chaseos_data_dir,
     get_config_dir,
@@ -114,7 +114,7 @@ class ReadinessService:
             "",
             "Wallpaper readiness",
             f"  Monitor mapping: {_exists_status(get_monitor_mapping_path(self.base_path))}",
-            f"  Public poster: {public_poster_status}",
+            f"  Display 1 art: {public_poster_status}",
             f"  Generated manifest: {_exists_status(_manifest_path(self.planner), warn='missing')}",
             f"  Rollback state: {rollback_status}",
             f"  Last diagnostics: {diagnostics_status}",
@@ -144,8 +144,8 @@ class ReadinessService:
 
         lines.extend(
             (
-                f"Latest public poster: {poster_path if poster_path else 'missing'}",
-                f"Public poster dimensions: {_dimensions_label(poster_path)}",
+                f"Latest Display 1 art: {poster_path if poster_path else 'missing'}",
+                f"Display 1 art dimensions: {_dimensions_label(poster_path)}",
                 f"Latest wallpaper manifest: {manifest.manifest_path}",
                 f"Generated date: {manifest.date.isoformat()}",
                 "",
@@ -192,7 +192,7 @@ class ReadinessService:
             )
 
         theme, theme_source = self._theme_plan()
-        poster_engine = PublicPosterEngine(base_path=self.base_path)
+        poster_engine = Display1ArtEngine(base_path=self.base_path)
         plan = poster_engine.build_plan(
             innovation_exercise="First-run readiness",
             private_innovation_takeaway=takeaway,
@@ -221,8 +221,8 @@ class ReadinessService:
             *warnings,
             f"Innovation takeaway source: {source}",
             f"Theme source: {theme_source}",
-            f"Public poster: {poster_result.image_path}",
-            f"Poster metadata: {poster_result.metadata_path}",
+            f"Display 1 art: {poster_result.image_path}",
+            f"Display 1 art metadata: {poster_result.metadata_path}",
             f"Display 4 wallpaper: {manifest.wallpapers['display_4'].image_path}",
             f"Display 2 wallpaper: {manifest.wallpapers['display_2'].image_path}",
             f"Display 3 wallpaper: {manifest.wallpapers['display_3'].image_path}",

@@ -11,6 +11,9 @@ from PIL import Image, ImageDraw, ImageEnhance, ImageFont, ImageOps, Unidentifie
 
 from chaseos.models.assets import GeneratedWallpaper
 from chaseos.models.theme import ThemePlan, VisualDensity
+from chaseos.rendering._draw_utils import blend as _blend
+from chaseos.rendering._draw_utils import hex_to_rgb as _hex_to_rgb
+from chaseos.rendering._draw_utils import rgba as _rgba
 
 WALLPAPER_ROLES = (
     "public_signal",
@@ -48,23 +51,6 @@ class WallpaperRenderSpec:
     photo_path: Path | None = None
     photo_mode: str = "generated"
     fallback_reason: str | None = None
-
-
-def _hex_to_rgb(value: str) -> tuple[int, int, int]:
-    value = value.lstrip("#")
-    return tuple(int(value[index : index + 2], 16) for index in (0, 2, 4))
-
-
-def _blend(
-    color_a: tuple[int, int, int],
-    color_b: tuple[int, int, int],
-    amount: float,
-) -> tuple[int, int, int]:
-    return tuple(round(a + ((b - a) * amount)) for a, b in zip(color_a, color_b, strict=True))
-
-
-def _rgba(color: tuple[int, int, int], alpha: int) -> tuple[int, int, int, int]:
-    return (*color, alpha)
 
 
 def _font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
@@ -438,6 +424,5 @@ class WallpaperRenderer:
     def _has_body_constraint(self, theme_plan: ThemePlan) -> bool:
         text = " ".join(theme_plan.notes).lower()
         return any(
-            term in text
-            for term in ("headache", "sensory", "low sleep", "fatigue", "body load")
+            term in text for term in ("headache", "sensory", "low sleep", "fatigue", "body load")
         )

@@ -8,23 +8,12 @@ from PIL import Image, ImageDraw, ImageFont
 
 from chaseos.models.poster import PublicPosterPlan, PublicPosterRenderResult
 from chaseos.models.theme import ThemePlan
+from chaseos.rendering._draw_utils import blend as _blend
+from chaseos.rendering._draw_utils import hex_to_rgb as _hex_to_rgb
 
 PUBLIC_POSTER_SIZE = (1080, 1920)
 
 SAFE_MARGIN = 110
-
-
-def _hex_to_rgb(value: str) -> tuple[int, int, int]:
-    value = value.lstrip("#")
-    return tuple(int(value[index : index + 2], 16) for index in (0, 2, 4))
-
-
-def _blend(
-    color_a: tuple[int, int, int],
-    color_b: tuple[int, int, int],
-    amount: float,
-) -> tuple[int, int, int]:
-    return tuple(round(a + ((b - a) * amount)) for a, b in zip(color_a, color_b, strict=True))
 
 
 def _font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:

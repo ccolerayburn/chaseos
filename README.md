@@ -63,10 +63,10 @@ Or, from the local virtual environment:
   theme plan.
 - Theme approval supports `/approve`, `/change <request>`, `/regenerate`, and `/skip`.
 - Mindfulness, verse, innovation, work ramp, and applying remain text-first.
-- After the innovation takeaway, ChaseOS creates a public-safe poster plan based only on
-  the innovation takeaway.
-- Poster approval supports `/approve`, `/change <request>`, `/regenerate`, `/poster`,
-  and `/skip`.
+- After the innovation takeaway, ChaseOS creates a text-free Display 1 art plan
+  seeded only by the public-safe innovation takeaway.
+- Display 1 art approval supports `/approve`, `/change <request>`, `/regenerate`,
+  `/poster`, and `/skip`.
 - On poster approval, ChaseOS renders a real 1080x1920 PNG for Display 1 and saves
   metadata next to it.
 - During the APPLYING stage, ChaseOS renders private 1920x1080 wallpapers for Displays
@@ -97,9 +97,9 @@ how are you, really?
 
 Answer in plain language. The Phase 8 engine interprets the answer locally into
 practical work-start signals, then asks you to approve, change, regenerate, or skip the
-text-only theme plan. Later in the ritual, your innovation takeaway becomes the only
-source for the public Display 1 poster. At the end, ChaseOS generates private
-wallpapers from the selected theme only.
+text-only theme plan. Later in the ritual, your innovation takeaway is converted to a
+public-safe seed for text-free Display 1 generated art. At the end, ChaseOS generates
+private wallpapers from the selected theme only.
 
 ## Local Interpretation
 
@@ -133,6 +133,9 @@ Theme families:
 - Arctic Interface
 - Synth Sanctuary
 - Synthetic Sunrise
+- Dusk Skyline
+- Mako Reactor
+- Lofi Dusk
 
 Supported theme changes include:
 
@@ -149,9 +152,9 @@ Supported theme changes include:
 - `/change more contrast`
 - `/change less contrast`
 
-## Daily Public Innovation Poster
+## Daily Public Generated Art
 
-Display 1 is the public portrait monitor. ChaseOS renders:
+Display 1 is the public portrait monitor. ChaseOS renders text-free generated art:
 
 ```text
 %LOCALAPPDATA%\ChaseOS\posters\YYYY-MM-DD\display_1_public_signal.png
@@ -163,33 +166,35 @@ Metadata is saved next to it:
 %LOCALAPPDATA%\ChaseOS\posters\YYYY-MM-DD\public_poster_meta.json
 ```
 
-The poster engine:
+The Display 1 art engine:
 
-- uses only the innovation takeaway as content source
-- converts private wording into a public-safe principle
-- generates an original short quote locally
-- redacts ticket IDs, emails, URLs, IPs, hostnames, file paths, credentials, company or
-  internal system names, and private health details
-- never uses the raw check-in for public poster content
+- uses the public-safe innovation takeaway only as a deterministic seed
+- renders no readable text and does not use fonts or glyph drawing
+- never uses general Lightroom/local photos
+- never uses the raw check-in for public art content
+- writes the same image and metadata paths as the old poster contract
 
-Poster approval commands:
+Display 1 art approval commands:
 
 - `/approve`
 - `/skip`
 - `/poster`
 - `/regenerate`
-- `/change quote shorter`
-- `/change less cheesy`
-- `/change more inspirational`
-- `/change more minimal`
 - `/change more cyberpunk`
-- `/change no subtitle`
+- `/change lofi`
+- `/change ff7` or `/change mako`
+- `/change darker`
+- `/change brighter`
+- `/change more geometry`
+- `/change less geometry`
+- `/change no figure`
+- `/change calmer skyline`
 
 ## Private Monitor Wallpapers
 
 Display role mapping:
 
-- Display 1: public poster, 1080x1920
+- Display 1: public generated art, 1080x1920
 - Display 4: left atmosphere wallpaper, 1920x1080
 - Display 2: center command wallpaper, 1920x1080
 - Display 3: right inspiration wallpaper, 1920x1080
@@ -287,12 +292,13 @@ size, and indexed time. It does not run face recognition, OCR, identity inferenc
 external service calls. Generated wallpaper PNGs are freshly rendered and do not preserve
 source EXIF metadata.
 
-Display 1 public poster restrictions:
+Display 1 public generated art restrictions:
 
 - General local photos are never used on Display 1.
-- If an approved public poster exists, it remains the Display 1 source.
+- Readable text is never rendered on Display 1 art.
+- If approved Display 1 art exists, it remains the Display 1 source.
 - The generated `display_1_public_signal.png` placeholder is used only when no approved
-  public poster path is available.
+  public art path is available.
 
 ## Wallpaper Application
 
@@ -376,8 +382,8 @@ Safety rules:
 - ChaseOS does not modify registry settings.
 - ChaseOS does not restart Explorer.
 - ChaseOS does not require admin rights.
-- ChaseOS does not modify taskbar pins or icons.
-- Display 1 never uses general local photos.
+- ChaseOS does not programmatically modify taskbar pins.
+- Display 1 never uses general local photos or readable text.
 
 If monitor mapping looks wrong, use the existing monitor commands:
 
@@ -464,7 +470,7 @@ Start the daily ritual:
 /start
 ```
 
-The ritual can generate the Display 1 public poster, private Display 4/2/3 wallpapers,
+The ritual can generate the Display 1 public art, private Display 4/2/3 wallpapers,
 and `wallpaper_manifest.json`. It then shows asset status, wallpaper preflight, and an
 apply dry-run. It does not apply desktop wallpapers automatically.
 
@@ -519,9 +525,9 @@ Headless real apply still requires the unlock flag:
 
 Daily ritual safety notes:
 
-- Public poster content is based only on the innovation takeaway.
+- Display 1 art is seeded only by the public-safe innovation takeaway.
 - Raw check-in text is not persisted by default.
-- Display 1 never uses Lightroom/general photos.
+- Display 1 never uses Lightroom/general photos or readable text.
 - `/start`, `/prepare wallpapers`, `/verify wallpapers`, smoke modes, and dry-run do not
   apply wallpapers.
 - `/approve` advances the ritual and may generate assets, but it does not apply
@@ -616,6 +622,22 @@ Disable per-user startup:
 .\.venv\Scripts\python.exe -m chaseos --command "/startup disable"
 ```
 
+Create a branded Start Menu shortcut for manual taskbar pinning:
+
+```powershell
+.\.venv\Scripts\python.exe -m chaseos --command "/install shortcut"
+```
+
+Remove that Start Menu shortcut:
+
+```powershell
+.\.venv\Scripts\python.exe -m chaseos --command "/uninstall shortcut"
+```
+
+Windows has no supported public API for taskbar pinning. After installing the shortcut,
+open Start, right-click ChaseOS, and choose **Pin to taskbar** once. This does not enable
+auto-startup; `/startup enable` remains separate and explicit.
+
 Release info:
 
 ```powershell
@@ -668,7 +690,7 @@ Create an innovation takeaway file:
 Set-Content -Path .\innovation_takeaway.txt -Value "A small visible improvement beats a hidden perfect plan."
 ```
 
-Prepare daily poster and wallpaper assets without applying them:
+Prepare daily Display 1 art and wallpaper assets without applying them:
 
 ```powershell
 .\.venv\Scripts\python.exe -m chaseos --command "/prepare wallpapers --takeaway-file .\innovation_takeaway.txt"
@@ -698,7 +720,7 @@ Phase 12 safety notes:
 - `/prepare wallpapers` does not apply desktop wallpapers.
 - `--smoke wallpapers` does not apply desktop wallpapers.
 - `/apply wallpapers --confirm` is the only wallpaper apply command.
-- Display 1 never uses general local photos.
+- Display 1 never uses general local photos or readable text.
 
 ## Current Limitations
 
@@ -716,17 +738,17 @@ Phase 12 safety notes:
 - Interpret check-ins only into practical work-start signals:
   `energy`, `clarity`, `pressure`, `mood_weight`, `focus_friction`, `body_context`,
   `social_battery`, and `readiness`.
-- The public poster must never include private check-in details.
-- Public poster content must be based only on the innovation exercise takeaway.
-- Public content must redact ticket numbers, hostnames, URLs, emails, IPs, usernames,
+- Display 1 public art must never include private check-in details or readable text.
+- Display 1 public art must be seeded only from the public-safe innovation takeaway.
+- Public seed text must redact ticket numbers, hostnames, URLs, emails, IPs, usernames,
   company names, internal systems, credentials, and private health details.
 - Do not require admin rights.
 - Do not apply wallpapers without `/apply wallpapers --confirm`.
-- Do not call OpenAI, edit registry settings, restart Explorer, or modify taskbar pins.
+- Do not call OpenAI, edit registry settings, restart Explorer, or programmatically pin to the taskbar.
 
 ## Monitor Layout
 
-- Display 1: public portrait monitor, 1080x1920 innovation poster.
+- Display 1: public portrait monitor, 1080x1920 generated art.
 - Display 4: private landscape left atmosphere wallpaper.
 - Display 2: private landscape center command wallpaper.
 - Display 3: private landscape right inspiration wallpaper.
@@ -737,4 +759,4 @@ Local photo source:
 C:\_Media\Photos\Lightroom\Export
 ```
 
-General local photos must not be used on Display 1.
+General local photos and readable text must not be used on Display 1.

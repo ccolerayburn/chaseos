@@ -26,7 +26,13 @@ dev = [
 ]
 
 [project.scripts]
+chaseos-cli = "chaseos.__main__:main"
+
+[project.gui-scripts]
 chaseos = "chaseos.__main__:main"
+
+[tool.setuptools.package-data]
+chaseos = ["assets/*.ico"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

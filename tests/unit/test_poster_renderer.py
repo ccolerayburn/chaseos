@@ -3,13 +3,13 @@ import json
 from PIL import Image
 
 from chaseos.models.signals import PracticalSignals, StartupMode
-from chaseos.poster.public_poster_engine import PublicPosterEngine
+from chaseos.poster.art_engine import Display1ArtEngine
 from chaseos.theming.theme_generator import ThemeGenerator
 
 
-def test_poster_png_and_metadata_are_created(tmp_path) -> None:
+def test_display_one_art_png_and_metadata_are_created(tmp_path) -> None:
     theme = ThemeGenerator().generate(PracticalSignals(), StartupMode.STRUCTURED).plan
-    engine = PublicPosterEngine(base_path=tmp_path)
+    engine = Display1ArtEngine(base_path=tmp_path)
     plan = engine.build_plan(
         innovation_exercise="10% Less Dumb",
         private_innovation_takeaway="We keep asking the same questions manually.",
@@ -28,9 +28,9 @@ def test_poster_png_and_metadata_are_created(tmp_path) -> None:
     assert result.metadata_path.exists()
 
 
-def test_poster_png_is_exactly_1080x1920(tmp_path) -> None:
+def test_display_one_art_png_is_exactly_1080x1920(tmp_path) -> None:
     theme = ThemeGenerator().generate(PracticalSignals(), StartupMode.STRUCTURED).plan
-    engine = PublicPosterEngine(base_path=tmp_path)
+    engine = Display1ArtEngine(base_path=tmp_path)
     plan = engine.build_plan(
         innovation_exercise="10% Less Dumb",
         private_innovation_takeaway="Better inputs make faster fixes.",
@@ -48,9 +48,9 @@ def test_poster_png_is_exactly_1080x1920(tmp_path) -> None:
         assert image.size == (1080, 1920)
 
 
-def test_metadata_width_height_match(tmp_path) -> None:
+def test_display_one_art_metadata_declares_no_text_and_no_raw_content(tmp_path) -> None:
     theme = ThemeGenerator().generate(PracticalSignals(), StartupMode.STRUCTURED).plan
-    engine = PublicPosterEngine(base_path=tmp_path)
+    engine = Display1ArtEngine(base_path=tmp_path)
     plan = engine.build_plan(
         innovation_exercise="10% Less Dumb",
         private_innovation_takeaway="Clear handoffs reduce repeated work.",
@@ -67,10 +67,14 @@ def test_metadata_width_height_match(tmp_path) -> None:
     metadata = json.loads(result.metadata_path.read_text(encoding="utf-8"))
     assert metadata["width"] == 1080
     assert metadata["height"] == 1920
+    assert metadata["readable_text"] is False
+    assert metadata["raw_check_in_used_for_content"] is False
+    assert "private_takeaway" not in metadata
+    assert "quote" not in metadata
 
 
-def test_rendering_works_with_temp_directory(tmp_path) -> None:
-    engine = PublicPosterEngine(base_path=tmp_path)
+def test_display_one_art_rendering_works_with_temp_directory(tmp_path) -> None:
+    engine = Display1ArtEngine(base_path=tmp_path)
     plan = engine.build_plan(
         innovation_exercise="10% Less Dumb",
         private_innovation_takeaway="Turn friction into a system.",

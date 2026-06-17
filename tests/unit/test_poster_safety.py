@@ -1,10 +1,10 @@
 from chaseos.models.signals import PracticalSignals, StartupMode
+from chaseos.poster.art_engine import Display1ArtEngine
 from chaseos.poster.poster_safety import (
     PUBLIC_POSTER_SAFETY_RULES,
     public_safe_principle,
     redact_sensitive_public_text,
 )
-from chaseos.poster.public_poster_engine import PublicPosterEngine
 from chaseos.theming.theme_generator import ThemeGenerator
 
 
@@ -13,15 +13,15 @@ def test_public_poster_rules_keep_private_checkin_out() -> None:
     assert "use_only_innovation_takeaway" in PUBLIC_POSTER_SAFETY_RULES
 
 
-def test_raw_checkin_text_is_not_used_in_public_poster_plan() -> None:
+def test_raw_checkin_text_is_not_used_in_public_art_plan() -> None:
     theme = ThemeGenerator().generate(PracticalSignals(), StartupMode.STRUCTURED).plan
-    plan = PublicPosterEngine().build_plan(
+    plan = Display1ArtEngine().build_plan(
         innovation_exercise="10% Less Dumb",
         private_innovation_takeaway="We keep asking the same first questions manually.",
         theme_plan=theme,
         raw_check_in="slept bad and scattered",
     )
-    plan_text = PublicPosterEngine().describe_plan(plan)
+    plan_text = Display1ArtEngine().describe_plan(plan)
 
     assert "slept bad and scattered" not in plan_text
 

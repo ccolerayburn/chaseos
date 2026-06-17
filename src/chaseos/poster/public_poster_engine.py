@@ -135,7 +135,7 @@ class PublicPosterEngine:
                 f"display ......... {plan.display}",
                 f"size ............ {plan.width}x{plan.height}",
                 f"style ........... {plan.style_family.value}",
-                f"quote ........... \"{plan.quote}\"",
+                f'quote ........... "{plan.quote}"',
                 f"subtitle ........ {subtitle}",
                 "source .......... innovation takeaway only",
                 f"safe ............ {'yes' if plan.safe else 'no'}",
@@ -169,8 +169,11 @@ class PublicPosterEngine:
             ),
             ThemeFamily.SYNTHETIC_SUNRISE: (PublicPosterStyle.SYNTHETIC_SUNRISE,),
             ThemeFamily.NEON_NOIR: (PublicPosterStyle.NEON_BLUEPRINT,),
+            ThemeFamily.DUSK_SKYLINE: (PublicPosterStyle.SYNTHETIC_SUNRISE,),
+            ThemeFamily.MAKO_REACTOR: (PublicPosterStyle.NEON_BLUEPRINT,),
+            ThemeFamily.LOFI_DUSK: (PublicPosterStyle.SYNTHETIC_SUNRISE,),
         }
-        options = mapping[theme_plan.family]
+        options = mapping.get(theme_plan.family, (PublicPosterStyle.OBSIDIAN_SIGNAL,))
         return options[regenerate_count % len(options)]
 
     def _has_change(self, change_requests: list[str], *needles: str) -> bool:

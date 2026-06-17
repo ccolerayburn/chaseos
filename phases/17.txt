@@ -1,0 +1,236 @@
+# ChaseOS — Implementation Handoff: Display 1 Generated Art + On-Demand Launch
+
+You are implementing two independent changes in the `chaseos` repo (Python 3.11, PySide6,
+Pillow, pydantic v2; source under `src/chaseos/`, tests under `tests/`). Work in small,
+reviewable commits. Run `ruff check` and `pytest` before considering a workstream done.
+Do not call OpenAI, edit the registry, restart Explorer, or require admin rights — these
+are existing project constraints and they still hold.
+
+The two workstreams are independent and can land separately:
+
+- **Workstream A** — replace the Display 1 text-quote poster with seeded, text-free
+  generated art (dusk cyberpunk skyline aesthetic).
+- **Workstream B** — make ChaseOS a pin-to-taskbar, run-on-demand app rather than a
+  startup-folder auto-launcher.
+
+---
+
+## Workstream A — Display 1 becomes generated art
+
+### Intent / art direction
+
+Display 1 is the public portrait monitor (1080×1920). Today it renders a text quote
+poster built from the innovation takeaway. Replace it with an **atmospheric dusk
+cyberpunk scene**, composed from seeded generative layers. Target aesthetic: deep
+indigo→magenta sky with a low red/orange sun on the horizon, a dense field of warm-amber
+and cyan window lights reading as a city, a few foreground monolith towers, optional lone
+rooftop figure silhouette, plus thin abstract/geometric "technology" overlays (circuit
+lines, concentric rings, scanlines). Influences: cyberpunk dusk cityscapes, FF7→FFX
+(mako teal-green, Zanarkand gold, FF8 steel-blue), and lofi-girl coziness (warm desk-lamp
+amber against cool window-dusk).
+
+### Hard design rule (do not deviate)
+
+Display 1 is public. The art must contain **no readable text** and **no general local
+photos**. The innovation takeaway influences the art **only as a deterministic seed**:
+hash the existing public-safe takeaway string to an int and seed `random.Random(seed)`.
+Never render the takeaway, the raw check-in, or any private text onto Display 1. Preserve
+the existing invariant that Display 1 never sources general Lightroom/local photos.
+
+### Output contract to PRESERVE (this is the cheap integration seam)
+
+The downstream apply pipeline reads Display 1's image by path, not by content:
+
+- `wallpaper/plan.py` (~lines 155–160) resolves `MonitorRole.PUBLIC_SIGNAL` via
+  `latest_approved_public_poster()` → returns the poster PNG path.
+- `wallpaper/plan.py:96` `_is_general_photo_path` guard must continue to reject general
+  photos on Display 1.
+- `app/readiness.py` (~130, 147–155, 198–215) and `/daily status` read the same path/meta.
+
+**Therefore: write the art PNG to the same path/filename the poster engine uses
+(`POSTER_IMAGE_NAME` in `poster/poster_archive.py`) and a metadata JSON next to it
+(`POSTER_METADATA_NAME`).** If the path/dir contract holds, the apply/readiness/daily-status
+code needs zero changes. Verify this is true; if any downstream code keys off poster-only
+fields, adapt it, but prefer keeping the contract.
+
+### Files to add
+
+1. `src/chaseos/rendering/_draw_utils.py` (new shared module)
+   - Move `_hex_to_rgb`, `_blend`, `_rgba` out of `wallpaper/wallpaper_renderer.py` and
+     `poster/poster_renderer.py` into this module; import from here in both places.
+     Goal: one copy of these helpers, no duplication.
+
+2. `src/chaseos/poster/art_renderer.py` (new) — `Display1ArtRenderer`
+   - Renders 1080×1920 RGB PNG from a palette + intensity + seed, composed of layers,
+     each a private method, drawn in order:
+     - `_sky_gradient` — vertical sky-top → horizon-glow blend.
+     - `_sun_disc` — low horizon sun, soft radial glow, palette accent.
+     - `_skyline_silhouette` — distant skyline band + 2–4 foreground monolith rects,
+       seeded heights/positions.
+     - `_window_lights` — seeded field of small warm/cyan rectangles on the towers.
+     - `_haze` — alpha gradient pass near the horizon for depth.
+     - `_geometry_overlay` — thin circuit lines / concentric rings / scanlines; density &
+       alpha scale with `cyberpunk_intensity`.
+     - `_figure` — optional lone rooftop silhouette (toggle via plan).
+   - Must be deterministic: same (palette, intensity, seed, toggles) → identical bytes.
+   - Reuse the seeded-RNG pattern already in `wallpaper_renderer.py`
+     (`rng = random.Random(spec.seed)`).
+   - Draw NO glyphs / NO `ImageFont` text.
+
+3. `src/chaseos/poster/art_engine.py` (new) — `Display1ArtEngine`
+   - Mirrors the shape of `PublicPosterEngine` (build plan → render → save metadata) but
+     for art. `build_plan(...)`: seed = stable hash of the public-safe takeaway;
+     `regenerate_count` perturbs the seed; `change_requests` adjust motif/intensity/toggles.
+   - `render(...)`: writes to the same poster image path + a metadata JSON (see contract
+     above). Keep the "skip if exists and not force_regenerate" behavior the poster engine
+     already has.
+
+### Files to modify
+
+4. `src/chaseos/models/theme.py`
+   - Add new `ThemeFamily` members for the aesthetic, e.g. `DUSK_SKYLINE`,
+     `MAKO_REACTOR`, `LOFI_DUSK`. (StrEnum.)
+   - `MonitorThemePlan.display_1` default → `"public generated art"`.
+
+5. `src/chaseos/theming/palettes.py`
+   - Add `THEME_PALETTES` entries for each new family (`ThemeColors`: background, surface,
+     primary, secondary, accent, text). Tune `DUSK_SKYLINE` to the dusk reference (indigo
+     background, magenta/rose surface, red-orange accent for the sun, amber + cyan for
+     lights). `MAKO_REACTOR` = teal/green industrial. `LOFI_DUSK` = warm amber + cool blue.
+
+6. `src/chaseos/theming/theme_generator.py`
+   - Update `MonitorThemePlan(display_1=...)` construction to `"public generated art"`.
+   - Allow the new families to be selectable (`_select_family`) and palette-resolvable.
+     NOTE: `public_poster_engine.py` `_style_from_theme` uses an exhaustive
+     `mapping[theme_plan.family]` dict — if the art engine bypasses that engine (it should),
+     you don't need to extend the mapping, but ensure no code path passes a new family into
+     `_style_from_theme` and KeyErrors. If it can, add safe fallback entries.
+
+7. `src/chaseos/models/poster.py`
+   - Add `Display1ArtPlan` (BaseModel): `family`/motif, `seed: int`, layer toggles
+     (`show_figure: bool`, etc.), `cyberpunk_intensity: float` (0–1), `change_requests`,
+     `regenerate_count`. Do NOT require `quote`.
+   - Add `Display1ArtMetadata`: records seed, palette/family, `readable_text: bool = False`,
+     `raw_check_in_used_for_content: bool = False`, generated_at, image path, dimensions,
+     approved, change_requests, regenerate_count.
+   - Leave `PublicPosterPlan` / `PublicPosterMetadata` intact (don't break the old path).
+
+8. `src/chaseos/ritual/startup_sequence.py`
+   - The innovation-takeaway → poster build/render calls (~534, 552, 747, 1085) should call
+     the new `Display1ArtEngine` instead of `PublicPosterEngine`. Keep the approve / change /
+     regenerate / skip control flow. `/regenerate` reseeds; `/approve` renders + saves to the
+     poster path; raw check-in still not persisted.
+
+9. `src/chaseos/app/command_router.py`
+   - Update `/change` vocabulary for art: `more cyberpunk`, `lofi`, `ff7` (or `mako`),
+     `darker`, `brighter`, `more geometry`, `less geometry`, `no figure`, `calmer skyline`.
+   - Keep `/poster` (now prints art plan/path), `/approve`, `/skip`, `/regenerate`.
+
+10. `README.md`
+    - Update the Display 1 section: "public generated art" not "innovation poster"; new
+      `/change` options; restate the no-text / no-general-photos invariant.
+
+### Tests (Workstream A)
+
+- Update `tests/unit/test_poster_renderer.py`, `tests/unit/test_poster_safety.py`,
+  `tests/integration/test_poster_public_safety.py` for the new behavior.
+- Add `tests/unit/test_art_renderer.py`:
+  - determinism: same seed/palette/toggles → byte-identical PNG.
+  - output dimensions are exactly 1080×1920.
+  - no fonts/text are drawn (assert no `ImageFont`/`draw.text` usage in the render path,
+    or assert against a known render that text regions are absent — pick the practical check).
+- Add a test asserting Display 1 art still never resolves a general photo path
+  (`_is_general_photo_path` guard intact).
+
+---
+
+## Workstream B — pin-to-taskbar, run on demand (not a startup script)
+
+### Intent
+
+ChaseOS should be launched manually each day from a pinned taskbar icon, not auto-run at
+login. Nothing currently auto-runs unless `/startup enable` was invoked, so this is mostly:
+ship a windowless, branded, pinnable launcher and set up clean taskbar pinning.
+
+### Changes
+
+1. `pyproject.toml`
+   - Add a GUI (no-console) entry point so a windowless `chaseos.exe` is produced in
+     `.venv\Scripts\`:
+     ```toml
+     [project.gui-scripts]
+     chaseos = "chaseos.__main__:main"
+     ```
+   - Keep the existing `[project.scripts]` console entry if useful for headless CLI, or
+     rename it (e.g. `chaseos-cli`) to avoid two `chaseos.exe` collisions — verify which
+     entry table wins on Windows and ensure the pinnable target is the GUI one.
+
+2. `src/chaseos/app/tray_app.py`
+   - At the very start of app init (before setting the window/app icon), set an explicit
+     AppUserModelID so the taskbar pin is stable and branded:
+     ```python
+     import ctypes
+     try:
+         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("ChaseCole.ChaseOS")
+     except Exception:
+         pass  # non-Windows / unavailable
+     ```
+   - Use a real `.ico` for `QApplication.setWindowIcon` and the tray icon (see #3); keep
+     `create_fallback_icon()` only as a fallback when the asset is missing.
+
+3. Add `src/chaseos/assets/chaseos.ico` (real multi-resolution icon). Reference it from the
+   tray app and the shortcut creation. Ensure it's included in packaging (package-data /
+   `MANIFEST.in` / setuptools package data as appropriate).
+
+4. `src/chaseos/windows/startup_shortcut.py`
+   - Generalize `StartupShortcutManager` so the destination folder is a parameter:
+     Startup folder vs. Start Menu Programs vs. Desktop. Reuse the existing PowerShell /
+     WScript COM backend.
+   - Add command support for `/install shortcut` and `/uninstall shortcut` (wire through
+     `command_router.py` + `headless.py`) that writes a **Start Menu Programs** shortcut
+     named `ChaseOS.lnk`, target = the GUI `chaseos.exe`, icon = `chaseos.ico`,
+     working dir = project root.
+   - Keep `/startup enable|disable|status` available but separate; do not auto-enable it.
+   - NOTE: modern Windows has no public API to programmatically pin to the taskbar. The
+     correct UX is: command creates the branded Start-Menu shortcut, user right-clicks →
+     "Pin to taskbar" once. Document this in the README and the command output.
+
+5. Optional (nice-to-have, only if time permits)
+   - Second-launch focus: `SingleInstanceGuard` (`windows/single_instance.py`) currently
+     just blocks a second instance. Improve so a second click signals the running instance
+     to show/focus the terminal window (lightweight local socket or watched flag file).
+   - Add a `--start` flag (and/or default first-launch behavior) so clicking the pinned
+     icon opens the terminal window and drops the user at the ritual rather than a bare
+     tray icon.
+
+### Tests (Workstream B)
+
+- Extend `tests/unit/test_windows_operation.py` (or add a focused test) to cover the
+  generalized shortcut manager target-folder selection and the new install/uninstall
+  command routing. Keep these non-mutating / mocked — do not actually write to the user's
+  Start Menu in CI.
+
+---
+
+## Acceptance criteria
+
+- `pytest` and `ruff check` pass.
+- Display 1 renders 1080×1920 generated art matching the dusk cyberpunk direction, with
+  zero readable text and zero general local photos; rendering is deterministic per seed.
+- The innovation takeaway influences the art only as a seed; raw check-in is not persisted.
+- The wallpaper apply / readiness / `/daily status` pipeline works unchanged because the
+  art writes to the existing Display 1 poster path + metadata contract.
+- A windowless `chaseos.exe` exists and launches the tray app with the `.ico` icon and a
+  stable AppUserModelID; `/install shortcut` creates a Start-Menu shortcut suitable for
+  manual taskbar pinning. No registry Run keys, no scheduled tasks, no admin, no
+  auto-startup unless `/startup enable` is explicitly run.
+
+## Suggested commit order
+
+1. Extract shared draw utils (refactor, no behavior change).
+2. Add new ThemeFamily values + palettes.
+3. Add `Display1ArtRenderer` + tests (build/tune in isolation first).
+4. Add `Display1ArtPlan` / `Display1ArtMetadata` models.
+5. Add `Display1ArtEngine`; wire ritual + command router; update README.
+6. (Independent) Workstream B: gui-scripts, AppUserModelID, .ico, shortcut manager,
+   install command, README.

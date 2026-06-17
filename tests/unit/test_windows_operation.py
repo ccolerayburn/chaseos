@@ -13,7 +13,7 @@ from chaseos.windows.startup_shortcut import StartupShortcutInfo, StartupShortcu
 class FakeShortcutBackend:
     def __init__(self) -> None:
         self.info: StartupShortcutInfo | None = None
-        self.created: tuple[Path, Path, str, Path] | None = None
+        self.created: tuple[Path, Path, str, Path, Path | None] | None = None
         self.removed: Path | None = None
 
     def status(self, shortcut_path: Path) -> StartupShortcutInfo:
@@ -25,14 +25,16 @@ class FakeShortcutBackend:
         target: Path,
         arguments: str,
         working_directory: Path,
+        icon_path: Path | None = None,
     ) -> None:
-        self.created = (shortcut_path, target, arguments, working_directory)
+        self.created = (shortcut_path, target, arguments, working_directory, icon_path)
         self.info = StartupShortcutInfo(
             exists=True,
             path=shortcut_path,
             target=str(target),
             arguments=arguments,
             working_directory=str(working_directory),
+            icon_location=str(icon_path) if icon_path else None,
         )
 
     def remove(self, shortcut_path: Path) -> bool:
@@ -138,6 +140,42 @@ def test_startup_disable_removes_shortcut_through_backend(tmp_path) -> None:
     assert "registry Run keys: not used" in text
 
 
+def test_install_shortcut_creates_start_menu_shortcut_without_startup(tmp_path) -> None:
+    backend = FakeShortcutBackend()
+    manager = StartupShortcutManager(
+        project_root=tmp_path,
+        backend=backend,
+        startup_folder=tmp_path / "startup",
+        start_menu_folder=tmp_path / "programs",
+    )
+
+    text = "\n".join(manager.install_shortcut_lines())
+
+    assert backend.created is not None
+    assert backend.created[0] == tmp_path / "programs" / "ChaseOS.lnk"
+    assert backend.created[2] == ""
+    assert backend.created[3] == tmp_path
+    assert backend.created[4] is not None
+    assert "Pin to taskbar" in text
+    assert "Startup auto-launch was not enabled." in text
+
+
+def test_uninstall_shortcut_removes_start_menu_shortcut_only(tmp_path) -> None:
+    backend = FakeShortcutBackend()
+    manager = StartupShortcutManager(
+        project_root=tmp_path,
+        backend=backend,
+        startup_folder=tmp_path / "startup",
+        start_menu_folder=tmp_path / "programs",
+    )
+    manager.install_shortcut_lines()
+
+    text = "\n".join(manager.uninstall_shortcut_lines())
+
+    assert backend.removed == manager.start_menu_shortcut_path
+    assert "Startup shortcut was not changed." in text
+
+
 def test_startup_commands_are_routed_without_registry_backend(tmp_path) -> None:
     sequence = StartupSequence(data_dir=tmp_path)
     backend = FakeShortcutBackend()
@@ -155,6 +193,26 @@ def test_startup_commands_are_routed_without_registry_backend(tmp_path) -> None:
     assert backend.created is not None
     assert backend.removed == sequence.startup_shortcuts.shortcut_path
     assert "registry Run keys: not used" in text
+
+
+def test_install_shortcut_commands_are_routed_without_registry_backend(tmp_path) -> None:
+    sequence = StartupSequence(data_dir=tmp_path)
+    backend = FakeShortcutBackend()
+    sequence.startup_shortcuts = StartupShortcutManager(
+        project_root=tmp_path,
+        backend=backend,
+        startup_folder=tmp_path / "startup",
+        start_menu_folder=tmp_path / "programs",
+    )
+
+    install = sequence.handle_input("/install shortcut")
+    uninstall = sequence.handle_input("/uninstall shortcut")
+    text = "\n".join(line.text for line in (*install.lines, *uninstall.lines))
+
+    assert backend.created is not None
+    assert backend.removed == sequence.startup_shortcuts.start_menu_shortcut_path
+    assert "SHORTCUT INSTALLED" in text
+    assert "SHORTCUT UNINSTALLED" in text
 
 
 def test_release_info_includes_metadata_sections(tmp_path) -> None:
