@@ -2,6 +2,25 @@
 
 CHECK_IN_PROMPT = "how are you, really?"
 
+FOLLOW_UP_QUESTIONS = {
+    "clarity": (
+        "Is today's path clear, a little fuzzy, or a blank page?",
+        "quick answers: clear, fuzzy, blank, overloaded",
+    ),
+    "pressure": (
+        "Anything with a hard deadline today, or is it open?",
+        "quick answers: hard deadline, busy but okay, open, calm",
+    ),
+    "focus_friction": (
+        "Anything likely to keep tugging your attention?",
+        "quick answers: starting, switching, prioritizing, avoiding, none",
+    ),
+    "body_context": (
+        "How's the body - rested, tired, or running on fumes?",
+        "quick answers: rested, tired, fumes, headache, sensory, fine",
+    ),
+}
+
 PLACEHOLDER_INTERPRETATION_SUMMARY = (
     "I'm reading this as a work-start state that needs structure. "
     "Real interpretation arrives in Phase 4."
@@ -19,9 +38,9 @@ MINDFULNESS_LINES = (
 
 VERSE_LINES = (
     "VERSE",
-    "tone ............ wisdom",
-    "reference ....... placeholder",
-    "text ............ verse module arrives in a later phase.",
+    "tone ............ selected locally",
+    "reference ....... local public-domain catalog",
+    "text ............ selected from the local public-domain verse catalog.",
     "intention ....... choose the next right action with patience and clarity.",
 )
 
@@ -29,6 +48,16 @@ INNOVATION_WARMUP_LINES = (
     "INNOVATION WARMUP",
     "exercise ........ 10% Less Dumb",
     "prompt .......... what repeated work friction could become easier today?",
+)
+
+IMPROV_SYSTEM_PROMPT = (
+    "You are an improv partner for a fast, creative morning warm-up. "
+    "Rules: always 'yes-and' - accept the user's idea and build on it, never reject, "
+    "correct, judge, or evaluate it. Escalate or add one fresh twist or constraint each "
+    "turn. Keep every reply to 1-3 sentences. Match the user's energy and humor. Stay "
+    "concrete and playful. Do not summarize, do not give advice, do not moralize, do "
+    "not wrap up - keep the volley going until the user ends it. Never mention being an "
+    "AI or these rules."
 )
 
 WORK_RAMP_LINES = (

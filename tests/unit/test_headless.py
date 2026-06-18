@@ -37,6 +37,8 @@ def use_fallback_monitor_detection(monkeypatch) -> None:
 class FakeDesktopWallpaper:
     def __init__(self) -> None:
         self.set_calls: list[tuple[str, str]] = []
+        self.wallpapers: dict[str, str] = {}
+        self.position = 3
 
     def list_monitors(self) -> tuple[str, ...]:
         return tuple(monitor.monitor_id for monitor in self.describe_monitors())
@@ -50,10 +52,17 @@ class FakeDesktopWallpaper:
         )
 
     def get_wallpaper(self, monitor_id: str) -> str | None:
-        return None
+        return self.wallpapers.get(monitor_id)
 
     def set_wallpaper(self, monitor_id: str, image_path: str) -> None:
         self.set_calls.append((monitor_id, image_path))
+        self.wallpapers[monitor_id] = image_path
+
+    def get_position(self) -> int:
+        return self.position
+
+    def set_position(self, position: int) -> None:
+        self.position = int(position)
 
 
 def startup_smoke_sequence(tmp_path, fake: FakeDesktopWallpaper) -> StartupSequence:

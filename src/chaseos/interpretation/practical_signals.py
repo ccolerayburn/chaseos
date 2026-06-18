@@ -23,6 +23,7 @@ PRACTICAL_SIGNAL_KEYS = (
     "focus_friction",
     "body_context",
     "social_battery",
+    "drive",
     "readiness",
 )
 

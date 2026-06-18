@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
@@ -13,6 +14,7 @@ from chaseos.wallpaper.rollback import WallpaperRollbackStore
 from chaseos.wallpaper.windows_desktop_wallpaper import (
     DesktopWallpaperClient,
     DesktopWallpaperError,
+    DesktopWallpaperPosition,
     WindowsDesktopWallpaper,
 )
 
@@ -68,26 +70,56 @@ class WallpaperApplier:
             )
             for target in plan.targets
         }
-        self.rollback_store.save(previous)
+        previous_position = client.get_position()
+        if previous_position == DesktopWallpaperPosition.SPAN:
+            client.set_position(DesktopWallpaperPosition.FILL)
+        self.rollback_store.save(previous, position=int(previous_position))
 
-        applied: list[WallpaperTarget] = []
+        verified: list[tuple[WallpaperTarget, str]] = []
+        failed: list[tuple[WallpaperTarget, str, str | None]] = []
         for target in plan.targets:
             monitor_id = resolved_monitor_ids[target.monitor_id]
             try:
                 client.set_wallpaper(monitor_id, str(target.image_path))
             except Exception as exc:
-                raise WallpaperApplyError(f"failed to set {target.label}: {exc}") from exc
-            applied.append(target)
+                failed.append((target, monitor_id, f"set failed: {exc}"))
+                continue
+            actual = client.get_wallpaper(monitor_id)
+            if _same_wallpaper_path(actual, target.image_path):
+                verified.append((target, monitor_id))
+            else:
+                failed.append((target, monitor_id, actual))
 
-        self._save_apply_manifest(plan, applied)
+        self._save_apply_manifest(plan, verified, failed)
+        position_line = (
+            "Wallpaper position: Span detected; changed to Fill for per-monitor apply."
+            if previous_position == DesktopWallpaperPosition.SPAN
+            else f"Wallpaper position: {_wallpaper_position_name(previous_position)}."
+        )
+        warning_lines = tuple(
+            (
+                "WARNING: "
+                f"{target.label} did not change "
+                f"(monitor: {monitor_id}; "
+                f"expected: {target.image_path}; current: {actual or 'n/a'})"
+            )
+            for target, monitor_id, actual in failed
+        )
         return (
             "CHASEOS // WALLPAPER APPLY",
             "",
-            *(
-                f"{target.label}: {target.image_path}"
-                for target in applied
-            ),
+            position_line,
             "",
+            "Verified monitors:",
+            *(f"{target.label}: {target.image_path}" for target, _monitor_id in verified),
+            *(("none",) if not verified else ()),
+            "",
+            "Unverified or failed monitors:",
+            *warning_lines,
+            *(("none",) if not failed else ()),
+            "",
+            f"Verified: {len(verified)}",
+            f"Unverified or failed: {len(failed)}",
             f"Rollback saved: {self.rollback_store.path}",
             f"Apply manifest: {self.last_apply_manifest_path}",
         )
@@ -99,6 +131,10 @@ class WallpaperApplier:
 
         client = self._client()
         lines = ["CHASEOS // WALLPAPER RESET", ""]
+        if state.position is not None:
+            client.set_position(state.position)
+            position_name = _wallpaper_position_name(state.position)
+            lines.append(f"Restored wallpaper position: {position_name}")
         restored = 0
         for monitor_id, image_path in state.wallpapers.items():
             if not image_path.exists():
@@ -123,7 +159,8 @@ class WallpaperApplier:
     def _save_apply_manifest(
         self,
         plan: WallpaperApplyPlan,
-        applied: list[WallpaperTarget],
+        verified: list[tuple[WallpaperTarget, str]],
+        failed: list[tuple[WallpaperTarget, str, str | None]],
     ) -> None:
         self.last_apply_manifest_path.parent.mkdir(parents=True, exist_ok=True)
         self.last_apply_manifest_path.write_text(
@@ -132,18 +169,66 @@ class WallpaperApplier:
                     "applied_at": datetime.now(UTC).isoformat(),
                     "generated_date": plan.generated_date,
                     "mapping_source": plan.mapping_source,
+                    "verified_count": len(verified),
+                    "failed_count": len(failed),
+                    "verified_targets": [
+                        {
+                            **asdict(target),
+                            "monitor_id": monitor_id,
+                            "image_path": str(target.image_path),
+                            "verified": True,
+                        }
+                        for target, monitor_id in verified
+                    ],
+                    "failed_targets": [
+                        {
+                            **asdict(target),
+                            "monitor_id": monitor_id,
+                            "image_path": str(target.image_path),
+                            "verified": False,
+                            "actual_path": actual,
+                        }
+                        for target, monitor_id, actual in failed
+                    ],
                     "targets": [
                         {
                             **asdict(target),
+                            "monitor_id": monitor_id,
                             "image_path": str(target.image_path),
+                            "verified": True,
                         }
-                        for target in applied
+                        for target, monitor_id in verified
+                    ]
+                    + [
+                        {
+                            **asdict(target),
+                            "monitor_id": monitor_id,
+                            "image_path": str(target.image_path),
+                            "verified": False,
+                            "actual_path": actual,
+                        }
+                        for target, monitor_id, actual in failed
                     ],
                 },
                 indent=2,
             ),
             encoding="utf-8",
         )
+
+
+def _same_wallpaper_path(actual: str | None, expected: Path) -> bool:
+    if actual is None:
+        return False
+    actual_path = os.path.normcase(os.path.normpath(actual))
+    expected_path = os.path.normcase(os.path.normpath(str(expected)))
+    return actual_path == expected_path
+
+
+def _wallpaper_position_name(position: int) -> str:
+    try:
+        return DesktopWallpaperPosition(position).name.lower()
+    except ValueError:
+        return f"unknown:{position}"
 
 
 def _plan_summary_lines(plan: WallpaperApplyPlan, title: str) -> tuple[str, ...]:

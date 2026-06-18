@@ -14,6 +14,7 @@ from chaseos.storage.paths import get_previous_wallpapers_path
 class WallpaperRollbackState:
     captured_at: datetime
     wallpapers: dict[str, Path]
+    position: int | None = None
 
 
 class WallpaperRollbackStore:
@@ -26,7 +27,11 @@ class WallpaperRollbackStore:
     def path(self) -> Path:
         return get_previous_wallpapers_path(self.base_path)
 
-    def save(self, wallpapers: dict[str, Path | str | None]) -> WallpaperRollbackState:
+    def save(
+        self,
+        wallpapers: dict[str, Path | str | None],
+        position: int | None = None,
+    ) -> WallpaperRollbackState:
         state = WallpaperRollbackState(
             captured_at=datetime.now(UTC),
             wallpapers={
@@ -34,6 +39,7 @@ class WallpaperRollbackStore:
                 for monitor_id, path in wallpapers.items()
                 if path is not None and str(path).strip()
             },
+            position=position,
         )
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.path.write_text(
@@ -44,6 +50,7 @@ class WallpaperRollbackStore:
                         monitor_id: str(path)
                         for monitor_id, path in state.wallpapers.items()
                     },
+                    "position": state.position,
                 },
                 indent=2,
             ),
@@ -62,4 +69,5 @@ class WallpaperRollbackStore:
                 for monitor_id, path in raw.get("wallpapers", {}).items()
                 if str(path).strip()
             },
+            position=raw.get("position"),
         )

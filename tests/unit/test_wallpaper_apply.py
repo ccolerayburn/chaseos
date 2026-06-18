@@ -25,6 +25,7 @@ from chaseos.wallpaper.wallpaper_manifest import WALLPAPER_MANIFEST_NAME, Wallpa
 from chaseos.wallpaper.windows_desktop_wallpaper import (
     DesktopWallpaperError,
     DesktopWallpaperMonitor,
+    DesktopWallpaperPosition,
     WindowsDesktopWallpaper,
 )
 from chaseos.windows.display_detection import get_fallback_monitor_layout
@@ -41,14 +42,19 @@ class FakeDesktopWallpaper:
         previous: dict[str, Path] | None = None,
         rollback_path: Path | None = None,
         monitors: tuple[DesktopWallpaperMonitor, ...] | None = None,
+        position: int = DesktopWallpaperPosition.FILL,
+        echo_set: bool = True,
     ) -> None:
         self.previous = previous or {}
         self.rollback_path = rollback_path
+        self.position = int(position)
+        self.echo_set = echo_set
         self.monitors = monitors or tuple(
             DesktopWallpaperMonitor(index=index, monitor_id=monitor_id, wallpaper_path=None)
             for index, monitor_id in enumerate(self.previous)
         )
         self.set_calls: list[tuple[str, str]] = []
+        self.position_calls: list[int] = []
         self.rollback_existed_before_first_set: bool | None = None
 
     def list_monitors(self) -> tuple[str, ...]:
@@ -65,6 +71,15 @@ class FakeDesktopWallpaper:
         if self.rollback_existed_before_first_set is None and self.rollback_path is not None:
             self.rollback_existed_before_first_set = self.rollback_path.exists()
         self.set_calls.append((monitor_id, image_path))
+        if self.echo_set:
+            self.previous[monitor_id] = Path(image_path)
+
+    def get_position(self) -> int:
+        return self.position
+
+    def set_position(self, position: int) -> None:
+        self.position = int(position)
+        self.position_calls.append(int(position))
 
 
 class UnavailableDesktopWallpaper:
@@ -78,6 +93,12 @@ class UnavailableDesktopWallpaper:
         raise DesktopWallpaperError("COM unavailable")
 
     def set_wallpaper(self, monitor_id: str, image_path: str) -> None:
+        raise DesktopWallpaperError("COM unavailable")
+
+    def get_position(self) -> int:
+        raise DesktopWallpaperError("COM unavailable")
+
+    def set_position(self, position: int) -> None:
         raise DesktopWallpaperError("COM unavailable")
 
 
@@ -253,6 +274,40 @@ def test_apply_wallpapers_confirm_applies_all_four_roles(tmp_path) -> None:
     }
 
 
+def test_apply_wallpapers_confirm_warns_when_readback_does_not_match(tmp_path) -> None:
+    write_manifest(tmp_path)
+    fake = FakeDesktopWallpaper(echo_set=False)
+
+    lines = WallpaperApplier(client=fake, base_path=tmp_path).apply_confirmed(build_plan(tmp_path))
+
+    text = "\n".join(lines)
+    assert "WARNING:" in text
+    assert "did not change" in text
+    assert "Unverified or failed: 4" in text
+
+
+def test_apply_wallpapers_confirm_forces_span_to_fill_before_setting(tmp_path) -> None:
+    write_manifest(tmp_path)
+    fake = FakeDesktopWallpaper(position=DesktopWallpaperPosition.SPAN)
+
+    WallpaperApplier(client=fake, base_path=tmp_path).apply_confirmed(build_plan(tmp_path))
+
+    assert fake.position_calls == [DesktopWallpaperPosition.FILL]
+    assert fake.set_calls
+
+
+def test_apply_manifest_records_verified_targets(tmp_path) -> None:
+    write_manifest(tmp_path)
+    fake = FakeDesktopWallpaper()
+
+    WallpaperApplier(client=fake, base_path=tmp_path).apply_confirmed(build_plan(tmp_path))
+
+    payload = json.loads(get_last_apply_manifest_path(tmp_path).read_text(encoding="utf-8"))
+    assert payload["verified_count"] == 4
+    assert payload["failed_count"] == 0
+    assert all(target["verified"] is True for target in payload["targets"])
+
+
 def test_public_role_rejects_lightroom_or_general_photo_paths(tmp_path) -> None:
     public_photo = write_file(tmp_path / "photos" / "export" / "public.jpg")
     write_manifest(tmp_path, public_path=public_photo)
@@ -284,12 +339,16 @@ def test_missing_image_path_fails(tmp_path) -> None:
 
 def test_reset_wallpapers_restores_previous_paths(tmp_path) -> None:
     previous = write_file(tmp_path / "previous" / "old.png")
-    WallpaperRollbackStore(base_path=tmp_path).save({"monitor-a": previous})
+    WallpaperRollbackStore(base_path=tmp_path).save(
+        {"monitor-a": previous},
+        position=DesktopWallpaperPosition.SPAN,
+    )
     fake = FakeDesktopWallpaper()
 
     lines = WallpaperApplier(client=fake, base_path=tmp_path).reset()
 
     assert fake.set_calls == [("monitor-a", str(previous))]
+    assert fake.position_calls == [DesktopWallpaperPosition.SPAN]
     assert any("Restored wallpapers: 1" in line for line in lines)
 
 

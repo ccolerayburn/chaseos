@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import platform
 import sys
 from dataclasses import dataclass, field
@@ -9,6 +10,12 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 
 from chaseos import __version__
+from chaseos.ai.improv_client import (
+    ImprovClient,
+    ImprovUnavailable,
+    Message,
+    OpenAIImprovClient,
+)
 from chaseos.app.command_router import CommandResult, TerminalLine, route_command
 from chaseos.app.readiness import ReadinessService
 from chaseos.app.release_info import ReleaseInfoService
@@ -25,12 +32,18 @@ from chaseos.models.poster import Display1ArtPlan, PublicPosterRenderResult
 from chaseos.models.signals import PracticalSignals, StartupMode
 from chaseos.models.theme import ThemePlan
 from chaseos.poster.art_engine import Display1ArtEngine
+from chaseos.ritual.improv_scenarios import (
+    RecentScenarioStore,
+    local_yes_and,
+    select_scenario,
+)
 from chaseos.ritual.prompts import (
     APPLYING_LINES,
     CHECK_IN_PROMPT,
+    FOLLOW_UP_QUESTIONS,
+    IMPROV_SYSTEM_PROMPT,
     INNOVATION_WARMUP_LINES,
     MINDFULNESS_LINES,
-    VERSE_LINES,
     WORK_RAMP_LINES,
 )
 from chaseos.ritual.stages import RitualStage
@@ -39,6 +52,11 @@ from chaseos.storage.daily_session_store import DailySessionRecord, DailySession
 from chaseos.storage.paths import get_daily_summary_path, get_generated_dir
 from chaseos.storage.settings_store import MonitorMappingStore
 from chaseos.theming.theme_generator import ThemeGenerator
+from chaseos.verses.verse_selector import (
+    RecentVerseStore,
+    intention_for_verse,
+    select_verse,
+)
 from chaseos.wallpaper.applier import WallpaperApplier, WallpaperApplyError
 from chaseos.wallpaper.diagnostics import WallpaperDiagnosticsService
 from chaseos.wallpaper.photo_indexer import PhotoLibraryIndexer
@@ -66,6 +84,10 @@ class RitualSession:
     completed_at: datetime | None = None
     current_stage: RitualStage = RitualStage.IDLE
     raw_check_in: str | None = None
+    check_in_parts: list[str] = field(default_factory=list)
+    follow_up_queue: list[str] = field(default_factory=list)
+    asked_follow_ups: list[str] = field(default_factory=list)
+    current_follow_up: str | None = None
     placeholder_signals: dict[str, str] = field(default_factory=dict)
     signals: PracticalSignals | None = None
     interpretation_summary: tuple[str, ...] = ()
@@ -74,6 +96,11 @@ class RitualSession:
     theme_approved: bool = False
     innovation_takeaway: str | None = None
     innovation_exercise: str = "10% Less Dumb"
+    selected_verse_ref: str | None = None
+    improv_scenario: str | None = None
+    improv_history: list[dict[str, str]] = field(default_factory=list)
+    improv_turn_count: int = 0
+    improv_api_notice_shown: bool = False
     poster_change_requests: list[str] = field(default_factory=list)
     poster_approved: bool = False
     theme_regenerate_count: int = 0
@@ -109,7 +136,7 @@ def _yes_no(value: bool) -> str:
 def _signals_summary(signals: dict[str, object]) -> str:
     if not signals:
         return "not recorded"
-    keys = ("energy", "clarity", "pressure", "focus_friction", "readiness")
+    keys = ("energy", "clarity", "pressure", "drive", "focus_friction", "readiness")
     parts = [f"{key}={signals[key]}" for key in keys if signals.get(key)]
     return "; ".join(parts) if parts else "recorded"
 
@@ -135,6 +162,7 @@ class StartupSequence:
         data_dir: Path | str | None = None,
         photo_config: PhotoSourceConfig | None = None,
         wallpaper_applier: WallpaperApplier | None = None,
+        improv_client: ImprovClient | None = None,
     ) -> None:
         self.data_dir = Path(data_dir) if data_dir is not None else None
         self.timer = RitualTimer(target_minutes=target_minutes)
@@ -165,6 +193,9 @@ class StartupSequence:
             photo_config=self.photo_config,
         )
         self.daily_sessions = DailySessionStore(base_path=self.data_dir)
+        self.verse_store = RecentVerseStore(base_path=self.data_dir)
+        self.scenario_store = RecentScenarioStore(base_path=self.data_dir)
+        self.improv_client = improv_client
         self.startup_shortcuts = StartupShortcutManager(project_root=Path.cwd())
         self.release_info = ReleaseInfoService(project_root=Path.cwd(), base_path=self.data_dir)
 
@@ -180,6 +211,12 @@ class StartupSequence:
             RitualStage.CANCELLED,
             RitualStage.RESET,
         }
+
+    def run_date(self) -> date:
+        try:
+            return date.fromisoformat(self.daily_sessions.path().parent.name)
+        except ValueError:
+            return date.today()
 
     def handle_input(
         self,
@@ -283,6 +320,9 @@ class StartupSequence:
         if self.current_stage == RitualStage.CHECK_IN and result.action == "text":
             return self.capture_check_in(result.argument or raw_input.strip())
 
+        if self.current_stage == RitualStage.CHECK_IN_FOLLOW_UP:
+            return self.capture_check_in_follow_up(result, raw_input)
+
         if self.current_stage == RitualStage.THEME_APPROVAL:
             return self.handle_theme_approval(result)
 
@@ -292,8 +332,14 @@ class StartupSequence:
         if self.current_stage == RitualStage.VERSE:
             return self.handle_verse(result)
 
-        if self.current_stage == RitualStage.INNOVATION_TAKEAWAY and result.action == "text":
-            return self.capture_innovation_takeaway(result.argument or raw_input.strip())
+        if self.current_stage == RitualStage.INNOVATION:
+            return self.handle_innovation_improv(result, raw_input)
+
+        if self.current_stage == RitualStage.INNOVATION_TAKEAWAY:
+            if result.command == "/takeaway":
+                return self.capture_innovation_takeaway(result.argument or "")
+            if result.action == "text":
+                return self.capture_innovation_takeaway(result.argument or raw_input.strip())
 
         if self.current_stage == RitualStage.POSTER_APPROVAL:
             return self.handle_poster_approval(result)
@@ -327,8 +373,9 @@ class StartupSequence:
 
     def capture_check_in(self, check_in: str) -> SequenceResponse:
         self.session.raw_check_in = check_in
+        self.session.check_in_parts = [check_in]
         self.session.current_stage = RitualStage.INTERPRETING
-        interpretation = self.interpreter.interpret(check_in)
+        interpretation = self.interpreter.interpret(self._combined_check_in_text())
         self.session.signals = interpretation.signals
         self.session.placeholder_signals = interpretation.signals.model_dump(mode="json")
         self.session.startup_mode = interpretation.startup_mode.value
@@ -340,6 +387,53 @@ class StartupSequence:
             f"startup mode .... {self.session.startup_mode}",
         ]
         lines.extend(f"summary ......... {line}" for line in interpretation.user_facing_summary)
+        follow_ups = self._remaining_follow_ups(interpretation.signals)
+        if follow_ups:
+            self.session.follow_up_queue = list(follow_ups)
+            self.session.current_stage = RitualStage.CHECK_IN_FOLLOW_UP
+            lines.extend(self._next_follow_up_lines())
+            self.save_daily_session()
+            return SequenceResponse(_chaseos_lines(tuple(lines)))
+
+        return self.finish_interpretation(lines)
+
+    def capture_check_in_follow_up(
+        self,
+        result: CommandResult,
+        raw_input: str,
+    ) -> SequenceResponse:
+        if result.command in {"/skip", "/approve"}:
+            return self.finish_interpretation(["INTERPRETING", "follow-ups skipped."])
+        if result.action != "text":
+            return SequenceResponse(
+                (TerminalLine("chaseos", "answer the follow-up, or use /skip to continue."),)
+            )
+        answer = result.argument or raw_input.strip()
+        if self.session.current_follow_up:
+            self.session.asked_follow_ups.append(self.session.current_follow_up)
+        self.session.check_in_parts.append(f"{self.session.current_follow_up}: {answer}")
+        interpretation = self.interpreter.interpret(self._combined_check_in_text())
+        self.session.signals = interpretation.signals
+        self.session.placeholder_signals = interpretation.signals.model_dump(mode="json")
+        self.session.startup_mode = interpretation.startup_mode.value
+        self.session.interpretation_summary = interpretation.user_facing_summary
+
+        lines = [
+            "INTERPRETING",
+            f"signals ......... {self.format_signals(interpretation.signals)}",
+            f"startup mode .... {self.session.startup_mode}",
+        ]
+        lines.extend(f"summary ......... {line}" for line in interpretation.user_facing_summary)
+        follow_ups = self._remaining_follow_ups(interpretation.signals)
+        if follow_ups:
+            self.session.follow_up_queue = list(follow_ups)
+            lines.extend(self._next_follow_up_lines())
+            self.save_daily_session()
+            return SequenceResponse(_chaseos_lines(tuple(lines)))
+
+        return self.finish_interpretation(lines)
+
+    def finish_interpretation(self, lines: list[str]) -> SequenceResponse:
         self.session.current_stage = RitualStage.THEME_PLAN
         self.session.current_theme_plan = self.build_theme_plan()
         lines.extend(self.session.current_theme_plan.splitlines())
@@ -352,6 +446,33 @@ class StartupSequence:
             )
         )
         return SequenceResponse(_chaseos_lines(tuple(lines)))
+
+    def _combined_check_in_text(self) -> str:
+        return " ".join(part for part in self.session.check_in_parts if part.strip())
+
+    def _remaining_follow_ups(self, signals: PracticalSignals) -> tuple[str, ...]:
+        if len(self.session.asked_follow_ups) >= 3:
+            return ()
+        remaining = [
+            signal
+            for signal in self.interpreter.follow_up_signals(signals)
+            if signal not in self.session.asked_follow_ups
+        ]
+        return tuple(remaining[: 3 - len(self.session.asked_follow_ups)])
+
+    def _next_follow_up_lines(self) -> list[str]:
+        if not self.session.follow_up_queue:
+            return []
+        signal = self.session.follow_up_queue.pop(0)
+        self.session.current_follow_up = signal
+        question, hint = FOLLOW_UP_QUESTIONS[signal]
+        number = len(self.session.asked_follow_ups) + 1
+        return [
+            "",
+            f"follow-up {number}/3 ... {signal}",
+            question,
+            hint,
+        ]
 
     def handle_theme_approval(self, result: CommandResult) -> SequenceResponse:
         if result.command in {"/approve", "/skip"}:
@@ -400,8 +521,9 @@ class StartupSequence:
     def handle_mindfulness(self, result: CommandResult) -> SequenceResponse:
         if self._is_continue_signal(result):
             self.session.current_stage = RitualStage.VERSE
+            lines = self.verse_lines()
             self.save_daily_session()
-            return SequenceResponse(_chaseos_lines(VERSE_LINES))
+            return SequenceResponse(_chaseos_lines(lines))
         return SequenceResponse(
             (TerminalLine("chaseos", "type done, /approve, or /skip to continue."),)
         )
@@ -409,16 +531,107 @@ class StartupSequence:
     def handle_verse(self, result: CommandResult) -> SequenceResponse:
         if self._is_continue_signal(result):
             self.session.current_stage = RitualStage.INNOVATION
-            lines = [*INNOVATION_WARMUP_LINES, "what is today's useful insight?"]
-            self.session.current_stage = RitualStage.INNOVATION_TAKEAWAY
+            lines = self.start_improv_lines()
             self.save_daily_session()
             return SequenceResponse(_chaseos_lines(tuple(lines)))
         return SequenceResponse(
             (TerminalLine("chaseos", "type done, /approve, or /skip to continue."),)
         )
 
+    def handle_innovation_improv(
+        self,
+        result: CommandResult,
+        raw_input: str,
+    ) -> SequenceResponse:
+        if result.command == "/takeaway":
+            return self.capture_innovation_takeaway(result.argument or "")
+        if result.command == "/skip":
+            return self.capture_innovation_takeaway("One small visible improvement is enough.")
+        if result.action != "text":
+            return SequenceResponse(
+                (
+                    TerminalLine(
+                        "chaseos",
+                        "riff on the scenario, use /takeaway <insight>, or /skip.",
+                    ),
+                )
+            )
+
+        user_text = result.argument or raw_input.strip()
+        self.session.improv_history.append({"role": "user", "content": user_text})
+        response, source = self.improv_response()
+        self.session.improv_history.append({"role": "assistant", "content": response})
+        self.session.improv_turn_count += 1
+        self.save_daily_session()
+        return SequenceResponse(
+            _chaseos_lines(
+                (
+                    f"yes-and ({source}) ... {response}",
+                    "keep riffing, or capture it with /takeaway <insight>.",
+                )
+            )
+        )
+
+    def verse_lines(self) -> tuple[str, ...]:
+        signals = self.session.signals or PracticalSignals()
+        verse = select_verse(
+            self.session.startup_mode or StartupMode.STRUCTURED,
+            signals,
+            self.run_date(),
+            self.verse_store.load(),
+        )
+        self.verse_store.record(verse)
+        self.session.selected_verse_ref = verse.ref
+        tone = ", ".join(verse.tone_tags)
+        return (
+            "VERSE",
+            f"tone ............ {tone}",
+            f"reference ....... {verse.ref} ({verse.translation})",
+            f"text ............ {verse.text}",
+            f"intention ....... {intention_for_verse(verse, self.session.startup_mode)}",
+        )
+
+    def start_improv_lines(self) -> tuple[str, ...]:
+        scenario = select_scenario(self.run_date(), self.scenario_store.load())
+        self.scenario_store.record(scenario)
+        self.session.improv_scenario = scenario
+        self.session.improv_history = [{"role": "user", "content": scenario}]
+        self.session.improv_turn_count = 0
+        return (
+            *INNOVATION_WARMUP_LINES,
+            "mode ............ improv yes-and",
+            "privacy ......... only this improv volley can use the optional API",
+            "commands ........ /takeaway <insight>, /skip",
+            f"scenario ........ {scenario}",
+        )
+
+    def improv_response(self) -> tuple[str, str]:
+        history = [
+            Message(role="system", content=IMPROV_SYSTEM_PROMPT),
+            *(
+                Message(role=item["role"], content=item["content"])
+                for item in self.session.improv_history
+                if item["role"] in {"user", "assistant"}
+            ),
+        ]
+        if self.improv_client is None and os.environ.get("CHASEOS_IMPROV_API", "").lower() not in {
+            "1",
+            "true",
+            "yes",
+        }:
+            return local_yes_and(self.session.improv_turn_count), "local"
+        client = self.improv_client or OpenAIImprovClient()
+        try:
+            return client.respond(history), "api"
+        except ImprovUnavailable:
+            return local_yes_and(self.session.improv_turn_count), "local"
+
     def capture_innovation_takeaway(self, takeaway: str) -> SequenceResponse:
-        self.session.innovation_takeaway = takeaway
+        if not takeaway.strip():
+            return SequenceResponse(
+                _chaseos_lines(("takeaway missing. try /takeaway automate the repeat question.",))
+            )
+        self.session.innovation_takeaway = takeaway.strip()
         self.session.current_stage = RitualStage.POSTER_PLAN
         self.session.current_poster_plan = self.build_poster_plan()
         self.session.current_stage = RitualStage.POSTER_APPROVAL
@@ -757,6 +970,7 @@ class StartupSequence:
         )
         manifest = self.wallpaper_composer.generate(
             theme_plan=self.session.theme_plan,
+            run_date=self.run_date(),
             public_poster_path=public_poster_path,
             regenerate_count=self.session.wallpaper_regenerate_count,
         )
@@ -1034,7 +1248,7 @@ class StartupSequence:
         started_at = self.session.started_at or datetime.now(UTC)
         existing = self.daily_sessions.load()
         record = DailySessionRecord(
-            date=date.today(),
+            date=self.run_date(),
             started_at=existing.started_at if existing else started_at,
             updated_at=datetime.now(UTC),
             current_stage=self.session.current_stage.value,
@@ -1106,7 +1320,7 @@ class StartupSequence:
         return str(self.session.private_wallpaper_manifest.manifest_path)
 
     def today_manifest(self) -> WallpaperManifest | None:
-        path = get_generated_dir(date.today(), self.data_dir) / WALLPAPER_MANIFEST_NAME
+        path = get_generated_dir(self.run_date(), self.data_dir) / WALLPAPER_MANIFEST_NAME
         return WallpaperManifestStore().load(path)
 
     def live_apply_occurred_today(self) -> bool:
@@ -1119,7 +1333,7 @@ class StartupSequence:
             payload = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             return False
-        return payload.get("generated_date") == date.today().isoformat()
+        return payload.get("generated_date") == self.run_date().isoformat()
 
     def monitor_role_lines(self) -> tuple[TerminalLine, ...]:
         config = self.monitor_mapping_store.load()
@@ -1304,5 +1518,6 @@ class StartupSequence:
             f"focus_friction={signals.focus_friction.value}; "
             f"body_context={body_context}; "
             f"social_battery={signals.social_battery.value}; "
+            f"drive={signals.drive.value}; "
             f"readiness={signals.readiness.value}"
         )

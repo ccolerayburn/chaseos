@@ -3,6 +3,7 @@ from chaseos.interpretation.practical_signals import PRACTICAL_SIGNAL_KEYS
 from chaseos.interpretation.safety_rules import contains_forbidden_clinical_text
 from chaseos.models.signals import (
     ClarityLevel,
+    Drive,
     EnergyLevel,
     FocusFriction,
     MoodWeight,
@@ -20,6 +21,7 @@ def test_practical_signal_keys_match_product_boundary() -> None:
         "focus_friction",
         "body_context",
         "social_battery",
+        "drive",
         "readiness",
     )
 
@@ -43,6 +45,15 @@ def test_wired_restless_input_becomes_momentum_start() -> None:
     result = LocalCheckInInterpreter().interpret("wired and restless but motivated")
 
     assert result.signals.energy == EnergyLevel.HIGH
+    assert result.startup_mode == StartupMode.MOMENTUM
+
+
+def test_high_drive_input_becomes_momentum_start() -> None:
+    result = LocalCheckInInterpreter().interpret(
+        "clear calm focused rested and excited to build something great"
+    )
+
+    assert result.signals.drive == Drive.HIGH
     assert result.startup_mode == StartupMode.MOMENTUM
 
 

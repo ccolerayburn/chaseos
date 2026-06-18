@@ -8,6 +8,7 @@ from chaseos.interpretation.safety_rules import ensure_non_clinical_text
 from chaseos.models.signals import (
     CheckInInterpretation,
     ClarityLevel,
+    Drive,
     EnergyLevel,
     FocusFriction,
     MoodWeight,
@@ -64,6 +65,7 @@ class LocalCheckInInterpreter:
         focus_friction = self._focus_friction(text, matches)
         body_context = self._body_context(text, matches)
         social_battery = self._social_battery(text, matches)
+        drive = self._drive(text, matches)
 
         readiness = self._readiness(
             text=text,
@@ -73,6 +75,7 @@ class LocalCheckInInterpreter:
             mood_weight=mood_weight,
             focus_friction=focus_friction,
             body_context=body_context,
+            drive=drive,
             matches=matches,
         )
         signals = PracticalSignals(
@@ -83,6 +86,7 @@ class LocalCheckInInterpreter:
             focus_friction=focus_friction,
             body_context=body_context,
             social_battery=social_battery,
+            drive=drive,
             readiness=readiness,
         )
         startup_mode = self._startup_mode(text, signals)
@@ -153,7 +157,17 @@ class LocalCheckInInterpreter:
             return ClarityLevel.SCATTERED
         if _has_any(
             text,
-            ("foggy", "brain fog", "slow", "hazy", "groggy", "can't think", "cannot think"),
+            (
+                "foggy",
+                "fuzzy",
+                "blank",
+                "brain fog",
+                "slow",
+                "hazy",
+                "groggy",
+                "can't think",
+                "cannot think",
+            ),
         ):
             matches.append("foggy_clarity")
             return ClarityLevel.FOGGY
@@ -172,6 +186,8 @@ class LocalCheckInInterpreter:
                 "pressure",
                 "panic",
                 "urgent",
+                "hard deadline",
+                "deadline",
                 "behind",
                 "overwhelmed",
                 "on fire",
@@ -184,7 +200,7 @@ class LocalCheckInInterpreter:
         if _has_any(text, ("busy", "tense", "a lot", "full day")):
             matches.append("medium_pressure")
             return PressureLevel.MEDIUM
-        if _has_any(text, ("calm", "quiet", "steady")):
+        if _has_any(text, ("calm", "quiet", "steady", "open")):
             matches.append("low_pressure")
             return PressureLevel.LOW
         return PressureLevel.UNKNOWN
@@ -264,11 +280,12 @@ class LocalCheckInInterpreter:
             ("too_much_caffeine", ("too much caffeine", "too much coffee")),
             ("headache", ("headache", "migraine")),
             ("sensory_load", ("sensory", "bright lights", "too much noise", "noise")),
-            ("fatigue", ("tired", "fatigue", "exhausted", "drained")),
+            ("fatigue", ("tired", "fatigue", "exhausted", "drained", "fumes")),
             ("pain", ("pain",)),
             ("sick", ("sick",)),
             ("nauseous", ("nauseous", "nausea")),
             ("hydrated", ("hydrated", "water")),
+            ("rested", ("rested", "fine")),
             ("restless_body", ("restless", "antsy")),
         )
         for label, patterns in mapping:
@@ -286,6 +303,33 @@ class LocalCheckInInterpreter:
             return SocialBattery.MEDIUM
         return SocialBattery.UNKNOWN
 
+    def _drive(self, text: str, matches: list[str]) -> Drive:
+        if _has_any(
+            text,
+            (
+                "accomplishing",
+                "something great",
+                "excited",
+                "change my life",
+                "change this business",
+                "build",
+                "momentum",
+                "on a roll",
+                "locked in",
+                "make progress",
+                "fired up",
+            ),
+        ):
+            matches.append("high_drive")
+            return Drive.HIGH
+        if _has_any(text, ("unmotivated", "don't care", "do not care", "no drive")):
+            matches.append("low_drive")
+            return Drive.LOW
+        if _has_any(text, ("steady", "normal", "ready")):
+            matches.append("steady_drive")
+            return Drive.STEADY
+        return Drive.UNKNOWN
+
     def _readiness(
         self,
         text: str,
@@ -295,6 +339,7 @@ class LocalCheckInInterpreter:
         mood_weight: MoodWeight,
         focus_friction: FocusFriction,
         body_context: list[str],
+        drive: Drive,
         matches: list[str],
     ) -> Readiness:
         if _has_any(text, ("calm me down", "calm", "reduce noise", "quiet")):
@@ -316,6 +361,8 @@ class LocalCheckInInterpreter:
             return Readiness.NEEDS_CALM
         if mood_weight == MoodWeight.HEAVY and energy == EnergyLevel.LOW:
             return Readiness.NEEDS_CALM
+        if drive == Drive.HIGH and pressure != PressureLevel.HIGH:
+            return Readiness.NEEDS_MOMENTUM
         if clarity in {ClarityLevel.SCATTERED, ClarityLevel.FOGGY} or focus_friction in {
             FocusFriction.STARTING,
             FocusFriction.PRIORITIZING,
@@ -367,6 +414,8 @@ class LocalCheckInInterpreter:
             if signals.pressure == PressureLevel.HIGH or signals.clarity == ClarityLevel.OVERLOADED:
                 return StartupMode.STRUCTURED
             return StartupMode.TRIAGE
+        if signals.drive == Drive.HIGH and signals.pressure != PressureLevel.HIGH:
+            return StartupMode.MOMENTUM
         if signals.energy == EnergyLevel.HIGH and signals.pressure != PressureLevel.HIGH:
             return StartupMode.MOMENTUM
         if signals.clarity == ClarityLevel.CLEAR and signals.readiness in {
@@ -392,7 +441,8 @@ class LocalCheckInInterpreter:
             (
                 "I'm reading today as "
                 f"{signals.energy.value} energy, "
-                f"{signals.clarity.value} clarity, and {friction}."
+                f"{signals.clarity.value} clarity, "
+                f"{signals.drive.value} drive, and {friction}."
             ),
             f"I'll set this up as {startup_mode.value}: practical, low-noise, and work-facing.",
         ]
@@ -409,3 +459,20 @@ class LocalCheckInInterpreter:
         if len(lines) < 4:
             lines.append("Your first move should be small and concrete.")
         return tuple(lines[:4])
+
+    def follow_up_signals(self, signals: PracticalSignals) -> tuple[str, ...]:
+        """Return high-value unknown signals that can change downstream choices."""
+
+        follow_ups: list[str] = []
+        if signals.clarity == ClarityLevel.UNKNOWN:
+            follow_ups.append("clarity")
+        if signals.pressure == PressureLevel.UNKNOWN:
+            follow_ups.append("pressure")
+        if signals.focus_friction == FocusFriction.UNKNOWN:
+            follow_ups.append("focus_friction")
+        if not signals.body_context:
+            follow_ups.append("body_context")
+        return tuple(follow_ups)
+
+    def interpret_follow_up(self, signal: str, answer: str) -> PracticalSignals:
+        return self.interpret(f"{signal}: {answer}").signals

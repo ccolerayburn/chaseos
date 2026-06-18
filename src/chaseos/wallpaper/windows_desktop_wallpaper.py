@@ -4,11 +4,21 @@ from __future__ import annotations
 
 import platform
 from dataclasses import dataclass
+from enum import IntEnum
 from typing import Protocol
 
 
 class DesktopWallpaperError(RuntimeError):
     """Raised when per-monitor wallpaper APIs are unavailable."""
+
+
+class DesktopWallpaperPosition(IntEnum):
+    CENTER = 0
+    TILE = 1
+    STRETCH = 2
+    FILL = 3
+    FIT = 4
+    SPAN = 5
 
 
 @dataclass(frozen=True)
@@ -31,6 +41,12 @@ class DesktopWallpaperClient(Protocol):
 
     def set_wallpaper(self, monitor_id: str, image_path: str) -> None:
         """Set one monitor wallpaper."""
+
+    def get_position(self) -> int:
+        """Return the global Windows desktop wallpaper position."""
+
+    def set_position(self, position: int) -> None:
+        """Set the global Windows desktop wallpaper position."""
 
     def describe_monitors(self) -> tuple[DesktopWallpaperMonitor, ...]:
         """Return monitor IDs with current wallpaper and bounds when available."""
@@ -96,6 +112,12 @@ class WindowsDesktopWallpaper:
 
     def set_wallpaper(self, monitor_id: str, image_path: str) -> None:
         self._desktop_wallpaper.SetWallpaper(monitor_id, image_path)
+
+    def get_position(self) -> int:
+        return int(_out_value(self._desktop_wallpaper.GetPosition()))
+
+    def set_position(self, position: int) -> None:
+        self._desktop_wallpaper.SetPosition(int(position))
 
 
 def _out_value(value):

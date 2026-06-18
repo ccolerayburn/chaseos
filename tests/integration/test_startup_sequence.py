@@ -18,10 +18,12 @@ def test_full_text_only_ritual_flow_without_gui(tmp_path) -> None:
     inputs = (
         "/start",
         "tired and scattered but ready to work",
+        "open",
         "/approve",
         "done",
         "done",
         "we keep repeating the same troubleshooting questions",
+        "/takeaway we keep repeating the same troubleshooting questions",
         "/approve",
         "done",
     )

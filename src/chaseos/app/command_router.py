@@ -65,6 +65,7 @@ KNOWN_COMMANDS = (
     "/approve",
     "/regenerate",
     "/change",
+    "/takeaway",
     "/skip",
     "/status",
     "/monitors",
@@ -95,6 +96,7 @@ HELP_TOPICS: dict[str, tuple[str, ...]] = {
         "  /approve, /skip - advance the active ritual step",
         "  /change <text> - request a theme or Display 1 art adjustment",
         "  /regenerate - regenerate the active plan",
+        "  /takeaway <text> - capture the innovation insight during improv",
         "  /theme, /poster, /wallpapers - show current plans or paths",
         "  art changes: more cyberpunk, lofi, mako, darker, brighter, more geometry",
         "",
@@ -127,6 +129,7 @@ HELP_TOPICS: dict[str, tuple[str, ...]] = {
         "  python -m chaseos --smoke startup",
         "",
         "Safety notes",
+        "  Optional improv can use the API only when explicitly enabled.",
         "  Display 1 generated art has no readable text; no general Lightroom/local photos.",
         "  Raw check-in text is not persisted by default.",
         "  Help, status, diagnostics, smoke, export, verify, and dry-run do not apply.",
@@ -179,7 +182,7 @@ HELP_TOPICS: dict[str, tuple[str, ...]] = {
         "Display 1 generated art has no readable text and no general local photos.",
         "/prepare, /verify, /apply --dry-run, smoke, help, status, and export do not apply.",
         "/apply wallpapers --confirm is the explicit live apply command.",
-        "No OpenAI calls, admin rights, registry edits, or Explorer restarts.",
+        "Optional improv uses the API only when enabled; no admin, registry, or Explorer work.",
     ),
 }
 
@@ -352,6 +355,25 @@ class CommandRouter:
                 argument=argument,
                 lines=(TerminalLine("chaseos", f"change request captured: {argument}"),),
                 change_request=argument,
+            )
+        if command == "/takeaway":
+            if not argument:
+                return CommandResult(
+                    action="respond",
+                    command=command,
+                    argument=None,
+                    lines=(
+                        TerminalLine(
+                            "chaseos",
+                            "takeaway missing. try /takeaway automate the repeat question.",
+                        ),
+                    ),
+                )
+            return CommandResult(
+                action="respond",
+                command=command,
+                argument=argument,
+                lines=(TerminalLine("chaseos", "innovation takeaway captured."),),
             )
         if command == "/skip":
             return CommandResult(

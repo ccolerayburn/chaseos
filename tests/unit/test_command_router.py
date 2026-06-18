@@ -33,6 +33,7 @@ def test_phase_two_commands_are_reserved() -> None:
     assert "/photos" in KNOWN_COMMANDS
     assert "/index" in KNOWN_COMMANDS
     assert "/photo" in KNOWN_COMMANDS
+    assert "/takeaway" in KNOWN_COMMANDS
 
 
 def test_help_is_recognized() -> None:
@@ -316,6 +317,14 @@ def test_prepare_wallpapers_command_is_recognized() -> None:
     assert result.recognized is True
     assert result.command == "/prepare wallpapers"
     assert result.argument == "--takeaway useful insight"
+
+
+def test_takeaway_command_captures_text() -> None:
+    result = route_command("/takeaway useful insight")
+
+    assert result.recognized is True
+    assert result.command == "/takeaway"
+    assert result.argument == "useful insight"
 
 
 def test_photo_status_command_is_recognized() -> None:

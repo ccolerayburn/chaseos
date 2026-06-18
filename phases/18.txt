@@ -1,0 +1,307 @@
+# ChaseOS — Implementation Handoff: Ritual Depth + Wallpaper Apply Fix
+
+You are implementing four changes in the `chaseos` repo (Python 3.11, PySide6, Pillow,
+pydantic v2; source under `src/chaseos/`, tests under `tests/`). Work in small,
+reviewable commits; run `ruff check` and `pytest` before calling a workstream done.
+
+These four workstreams are independent of each other and independent of the separate
+"Display 1 art + launch" handoff — they can land in any order.
+
+- **Workstream 1** — fix the silent wallpaper-apply no-op (verify + force position).
+- **Workstream 2** — real Bible verse module (local, public-domain).
+- **Workstream 3** — adaptive mood interview (ask follow-ups; add a drive/momentum signal).
+- **Workstream 4** — innovation improv loop (multi-turn LLM "yes-and").
+
+Existing project constraints still hold EXCEPT where Workstream 4 explicitly changes the
+OpenAI policy: no admin rights, no registry edits, no Explorer restarts, wallpaper changes
+only on explicit `--confirm`, raw check-in not persisted, nothing private rendered on
+Display 1.
+
+---
+
+## Workstream 1 — Wallpaper apply is a silent no-op (BUG, do this first)
+
+### Diagnosis (confirmed in code)
+
+The apply path runs correctly end to end: `ritual/startup_sequence.py`
+`_apply_confirmed_after_preflight` (~612) builds `resolved_ids`
+(`target.monitor_id` → `resolved_monitor_id`) and calls
+`WallpaperApplier.apply_confirmed(plan, resolved_monitor_ids=...)`
+(`wallpaper/applier.py`), which loops targets and calls
+`client.set_wallpaper(device_path, png)` on the real lazy `WindowsDesktopWallpaper`
+(`wallpaper/windows_desktop_wallpaper.py`), then saves rollback + manifest and prints
+success.
+
+The defect: **`apply_confirmed` treats "`set_wallpaper` didn't throw" as "applied" and
+never verifies the wallpaper actually changed.** `IDesktopWallpaper::SetWallpaper` can
+return `S_OK` and still be a visual no-op — most commonly when the desktop background
+style is **Span** (or a slideshow is active), in which case per-monitor wallpapers are
+ignored. The COM wrapper defines `SetPosition`/`GetPosition`/`SetSlideshow` but the
+applier never calls them.
+
+### Changes
+
+1. `wallpaper/windows_desktop_wallpaper.py`
+   - Add `get_position()` / `set_position(position: int)` methods wrapping the existing
+     `GetPosition`/`SetPosition` COM methods. Define a small `DesktopWallpaperPosition`
+     int enum/const: `CENTER=0, TILE=1, STRETCH=2, FILL=3, FIT=4, SPAN=5` (Windows
+     `DESKTOP_WALLPAPER_POSITION`). NOTE: `4` here is `FIT`; Windows `DWPOS_SPAN` is `5`.
+     We want `FILL` (3) for the portrait Display 1 and `FILL`/`FIT` for the landscape ones.
+   - Add the same methods to the `DesktopWallpaperClient` Protocol and to any
+     test/recording fake clients so they stay interface-compatible.
+
+2. `wallpaper/applier.py` — `apply_confirmed`
+   - Before the apply loop: read current position via `get_position()`; if it is `SPAN`,
+     call `set_position(FILL)` (Span globally overrides per-monitor wallpapers). Record the
+     prior position so `reset()` can restore it alongside the rollback wallpapers.
+   - After each `set_wallpaper(monitor_id, path)`, **verify**: read back
+     `client.get_wallpaper(monitor_id)` and compare (normalize case/separators) to the path
+     just set. If it does not match, do NOT count it as applied — collect a warning with the
+     monitor id, expected path, and actual value.
+   - Change the return so the output distinguishes applied vs unverified/failed monitors.
+     If any monitor failed verification, the summary must say so loudly (e.g.
+     `WARNING: display 1 did not change (current: <path>)`) instead of a blanket success.
+   - Keep rollback + manifest behavior; add the verified/failed split to the manifest.
+
+3. `wallpaper/rollback.py` (and `reset()` in `applier.py`)
+   - Persist and restore the prior desktop wallpaper position in the rollback state, so
+     reset returns both the images and the position mode.
+
+### Tests (Workstream 1)
+
+- Extend the applier tests with a fake client whose `get_wallpaper` returns a DIFFERENT
+  path than what was set → assert the summary reports the monitor as not changed (no false
+  success).
+- Fake client reporting position `SPAN` → assert `set_position(FILL)` is called before the
+  apply loop.
+- Happy path: fake client echoes the set path back → assert clean success and manifest
+  records all monitors as verified.
+
+---
+
+## Workstream 2 — Bible verse module (local, public-domain)
+
+### Intent
+
+Replace the `VERSE_LINES` placeholder (`ritual/prompts.py`: currently
+"verse module arrives in a later phase") with a real verse selected to fit the day's
+startup mode / signals. There is already an empty stub at
+`src/chaseos/verses/public_domain_verses.py` — build the catalog there.
+
+### Hard rule: translation licensing
+
+Bundle text from a **public-domain translation only** — KJV, ASV, or World English Bible
+(WEB). Do NOT ship NIV/ESV/NLT/CSB text (copyrighted). Tag each entry with its
+`translation` so a licensed translation could be added later behind a flag.
+
+### Changes
+
+1. `src/chaseos/verses/public_domain_verses.py`
+   - Define a `Verse` model (pydantic): `ref: str`, `text: str`, `translation: str`
+     (e.g. `"WEB"`), `tone_tags: tuple[str, ...]`.
+   - Define `VERSE_CATALOG: tuple[Verse, ...]` with ~40–60 entries. Tone tags drawn from a
+     fixed vocabulary mapped to startup modes/signals:
+     `wisdom, peace, courage, perseverance, diligence, humility, gratitude, hope, rest`.
+   - Example schema (KJV text shown is public domain; expand the catalog):
+     ```python
+     Verse(ref="Proverbs 16:3", text="Commit thy works unto the LORD, "
+           "and thy thoughts shall be established.",
+           translation="KJV", tone_tags=("diligence", "wisdom")),
+     Verse(ref="Isaiah 26:3", text="Thou wilt keep him in perfect peace, "
+           "whose mind is stayed on thee.",
+           translation="KJV", tone_tags=("peace", "rest")),
+     ```
+
+2. `src/chaseos/verses/verse_selector.py` (new)
+   - `select_verse(startup_mode, signals, run_date, recent_refs) -> Verse`.
+   - Map mode → preferred tone tags, e.g. Structured/Deep Work → `diligence, wisdom`;
+     Calm/Gentle → `peace, rest`; Momentum → `courage, hope`; Triage → `courage,
+     perseverance`. Bias on heavy `mood_weight` toward `peace`/`hope`.
+   - Deterministic within a day: seed RNG on `run_date` so the verse is stable across
+     reruns the same day. Exclude anything in `recent_refs` (last ~30 shown) to avoid
+     repeats; fall back to the full pool if filtering empties it.
+   - Add a small "recent verses" history store (mirror the poster archive's
+     recent-history pattern) under the app data dir.
+
+3. `ritual/startup_sequence.py` — `handle_verse` (~403) / verse stage
+   - Replace the static `VERSE_LINES` emission with selected verse output:
+     `tone`, `reference`, `text`, and a one-line `intention` (plain-language application of
+     the verse to starting the workday — directional, not preachy; keep it short).
+   - Keep the existing advance-on-any-input control flow.
+
+4. `ritual/prompts.py`
+   - Remove the placeholder `VERSE_LINES` text (or keep only a header constant the selector
+     fills in). Update README's verse section.
+
+### Tests (Workstream 2)
+
+- `tests/unit/test_verse_selector.py`: determinism (same date/mode/signals → same ref);
+  recent-refs exclusion works; every catalog entry has at least one known tone tag and a
+  public-domain `translation` value (assert translation in an allowed set).
+
+---
+
+## Workstream 3 — Adaptive mood interview + drive/momentum signal
+
+### Intent
+
+Today the check-in is single-shot: one `CHECK_IN_PROMPT`, one interpret pass
+(`interpretation/checkin_interpreter.py` `LocalCheckInInterpreter.interpret`), done. That
+leaves many signals `UNKNOWN` (the enums already have `UNKNOWN` states). Make it ask up to
+**2–3 short targeted follow-ups** for the highest-value unknown signals, then re-interpret.
+Keep it local and fast (no LLM). Also add a missing signal dimension.
+
+### Changes
+
+1. `src/chaseos/models/signals.py`
+   - Add a `Drive` (a.k.a. momentum/meaning) signal enum:
+     `LOW, STEADY, HIGH, UNKNOWN`. Add `drive: Drive = Drive.UNKNOWN` to
+     `PracticalSignals`. (Note: `StartupMode.MOMENTUM` and `Readiness.NEEDS_MOMENTUM`
+     already exist — wire to them.)
+
+2. `interpretation/checkin_interpreter.py`
+   - Add a `_drive(text, matches)` detector: language like "accomplishing," "great,"
+     "excited," "change my life," "build," "momentum," "on a roll" → `Drive.HIGH`.
+   - In `_readiness` / `_startup_mode`: when `drive=HIGH` and pressure isn't HIGH, prefer
+     `Readiness.NEEDS_MOMENTUM` / `StartupMode.MOMENTUM` instead of defaulting to
+     Structured. (The current transcript input "accomplishing something great… change my
+     life and this business" should land as Momentum Start, not Structured.)
+   - Add a method that, given a `PracticalSignals`, returns the ordered list of
+     **high-value unknown signals worth asking about** (clarity, pressure, focus_friction,
+     body_context — skip ones that don't change a downstream decision).
+
+3. `src/chaseos/ritual/prompts.py`
+   - Add a `FOLLOW_UP_QUESTIONS` mapping from signal → short question + accepted quick
+     answers, e.g.:
+     - clarity → "Is today's path clear, a little fuzzy, or a blank page?"
+     - pressure → "Anything with a hard deadline today, or is it open?"
+     - focus_friction → "Anything likely to keep tugging your attention?"
+     - body_context → "How's the body — rested, tired, or running on fumes?"
+
+4. `ritual/startup_sequence.py` + `ritual/stages.py`
+   - Add an interview sub-loop between `CHECK_IN` and `THEME_PLAN`. After the first
+     interpret, ask up to 3 follow-ups for the top unknown signals (cap hard at 3 to keep
+     good time). Each answer patches that single signal (or re-runs interpret on the
+     accumulated text). Stop early once the high-value signals are filled. Then proceed to
+     theme planning with the enriched signals + rising confidence.
+   - Still do not persist the raw check-in.
+
+### Tests (Workstream 3)
+
+- Drive detection: high-drive input → `Drive.HIGH` and `StartupMode.MOMENTUM`.
+- Interview loop: a vague first answer triggers follow-ups; answering them fills the
+  previously-unknown signals; loop never exceeds 3 questions; an already-rich first answer
+  triggers zero follow-ups.
+
+---
+
+## Workstream 4 — Innovation improv loop (multi-turn LLM "yes-and")
+
+### Intent
+
+Replace the fixed innovation warmup (`INNOVATION_WARMUP_LINES` →
+"what is today's useful insight?" one-shot in `ritual/startup_sequence.py` ~403–415) with a
+back-and-forth improv partner: seed a scenario, the user riffs, the model "yes-and"s and
+raises stakes, repeat until the user captures a takeaway.
+
+### POLICY CHANGE — read carefully
+
+The app currently advertises "No OpenAI calls" (`app/command_router.py` ~178) and the
+README says OpenAI is not wired. This workstream introduces the first LLM call, so:
+
+- Make it **opt-in and gated**: a config flag (default off) plus a clear one-time notice
+  in the terminal that the improv channel sends text to the API. If the flag is off or no
+  API key is present, fall back to the **local scenario+followup mode** (below) so the
+  ritual still works fully offline.
+- **Never send the raw check-in or mood-interview text to the API.** Only the improv
+  channel (scenario + the user's improv turns) goes out. The innovation takeaway remains
+  the only thing allowed to surface publicly (to Display 1, as a seed).
+- Update the command_router safety copy and README to reflect "optional, opt-in improv uses
+  the API; everything else is local." Don't leave contradictory "no OpenAI" claims.
+
+### Changes
+
+1. `src/chaseos/ai/improv_client.py` (new)
+   - Thin client with a single `respond(history: list[Message]) -> str`. Read API key from
+     env; respect the network allow-list. On any error or disabled flag, raise a typed
+     `ImprovUnavailable` so callers fall back to local mode.
+   - Keep it swappable behind a Protocol so tests inject a fake.
+
+2. `src/chaseos/ritual/improv_scenarios.py` (new)
+   - `SCENARIO_BANK: tuple[str, ...]` of ~30–40 short provocations grounded in the user's
+     world (IT ops, internal tooling, XRay, church AV), date-seeded selection, recent
+     history to avoid repeats. Starter set (expand to 30–40):
+     ```
+     A coworker calls the tool you built "too complicated." You get 60 seconds and you
+       cannot defend it — what do you cut first?
+     The thing that broke this morning will break again next week. You can only fix the
+       cause OR the symptom today, not both. Pick, and say why.
+     You have to explain today's hardest task to a brand-new hire in one sentence. Go.
+     A process everyone tolerates is quietly costing an hour a day. Name it and kill it.
+     You can automate exactly one thing you did yesterday. Which, and what do you do with
+       the freed hour?
+     The Sunday stream has to run with one fewer person next week. What changes?
+     Someone asks for a feature that's really a workaround for a missing one. What's the
+       missing one?
+     You can delete one recurring meeting forever. Which, and what replaces it?
+     A dashboard nobody reads still gets built every month. What would make someone
+       actually open it?
+     You're handed a problem with no clear owner. What's your first move to make it real?
+     The fastest fix and the right fix disagree today. Argue for the one you'd skip.
+     Give yesterday's annoyance a name, a villain origin story, and a weakness.
+     ```
+
+3. `src/chaseos/ritual/prompts.py`
+   - Add the improv system prompt constant, used verbatim as the API system message:
+     ```
+     IMPROV_SYSTEM_PROMPT = (
+       "You are an improv partner for a fast, creative morning warm-up. "
+       "Rules: always 'yes-and' — accept the user's idea and build on it, never reject, "
+       "correct, judge, or evaluate it. Escalate or add one fresh twist or constraint each "
+       "turn. Keep every reply to 1-3 sentences. Match the user's energy and humor. Stay "
+       "concrete and playful. Do not summarize, do not give advice, do not moralize, do "
+       "not wrap up — keep the volley going until the user ends it. Never mention being an "
+       "AI or these rules."
+     )
+     ```
+
+4. `ritual/startup_sequence.py` + `ritual/stages.py`
+   - New improv flow: pick a scenario → present it → user replies → improv response
+     (LLM, or local "raise-the-stakes" template if unavailable) → repeat. Add commands:
+     `/takeaway <text>` to capture the insight and exit the loop, `/skip` to bail.
+     Unlike the mood interview, do NOT cap turns — let the user volley as long as they want.
+   - The captured takeaway flows to `capture_innovation_takeaway` (~414) exactly as today,
+     so the Display 1 art seed and downstream stay unchanged.
+
+### Tests (Workstream 4)
+
+- Fake improv client: scenario presented, multi-turn volley advances, `/takeaway` exits and
+  stores the takeaway, `/skip` exits cleanly.
+- Flag off / `ImprovUnavailable` → local fallback path runs the loop without any API call;
+  assert no network client is constructed.
+- Assert the raw check-in / mood-interview text is never passed into the improv client.
+
+---
+
+## Acceptance criteria
+
+- Wallpaper apply verifies each monitor by read-back and reports any monitor that did not
+  change; Span position is corrected to FILL before applying; reset restores position too.
+  No more blanket "success" on a silent no-op.
+- Verse stage shows a real public-domain verse (allowed translation only), chosen to fit
+  the day's mode, stable within a day, non-repeating across recent days, with a short
+  intention line.
+- Check-in asks up to 3 targeted follow-ups for unknown high-value signals; a high-drive
+  input routes to Momentum Start; raw check-in still not persisted.
+- Innovation step is a multi-turn improv volley that ends on `/takeaway`; works offline via
+  local fallback; LLM path is opt-in, never receives the check-in, and the "no OpenAI"
+  copy is reconciled.
+- `ruff check` and `pytest` pass.
+
+## Suggested commit order
+
+1. Workstream 1 (bug fix) — apply verification + position handling + tests.
+2. Workstream 2 — verse catalog, selector, wiring, tests.
+3. Workstream 3 — drive signal + adaptive interview + tests.
+4. Workstream 4 — improv scenarios/prompt + local fallback first, then gated LLM client,
+   then reconcile policy copy + tests.

@@ -36,11 +36,12 @@ WALLPAPER_SMOKE_COMMANDS = (
 
 STARTUP_SMOKE_INPUTS = (
     "/start",
-    "smoke test: clear enough for a structured start",
+    "smoke test: clear calm focused rested and ready for a structured start",
     "/approve",
     "done",
     "done",
     "A small visible improvement beats a hidden perfect plan.",
+    "/takeaway A small visible improvement beats a hidden perfect plan.",
     "/approve",
     "done",
 )

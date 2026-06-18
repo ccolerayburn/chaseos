@@ -53,6 +53,13 @@ class SocialBattery(StrEnum):
     UNKNOWN = "unknown"
 
 
+class Drive(StrEnum):
+    LOW = "low"
+    STEADY = "steady"
+    HIGH = "high"
+    UNKNOWN = "unknown"
+
+
 class Readiness(StrEnum):
     NEEDS_CALM = "needs_calm"
     NEEDS_STRUCTURE = "needs_structure"
@@ -81,6 +88,7 @@ class PracticalSignals(BaseModel):
     focus_friction: FocusFriction = FocusFriction.UNKNOWN
     body_context: list[str] = Field(default_factory=list)
     social_battery: SocialBattery = SocialBattery.UNKNOWN
+    drive: Drive = Drive.UNKNOWN
     readiness: Readiness = Readiness.UNKNOWN
 
 

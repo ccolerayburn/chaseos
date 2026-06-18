@@ -55,14 +55,20 @@ Or, from the local virtual environment:
   `/auto assign monitors`, `/save monitors`, `/reset monitors`, `/photos`,
   `/index photos`, `/photo source`, `/wallpapers`, `/generate wallpapers`,
   `/apply wallpapers --dry-run`, `/apply wallpapers --confirm`, `/reset wallpapers`,
-  `/clear`, and `/exit`.
+  `/takeaway <text>`, `/clear`, and `/exit`.
 - `/start` runs the full text-only 15-minute ritual flow.
 - The header shows current ritual stage, elapsed time, and remaining target time.
-- The ritual captures a private check-in and runs deterministic local interpretation.
+- The ritual captures a private check-in and runs deterministic local interpretation,
+  with up to three adaptive follow-ups when high-value signals are unknown.
 - ChaseOS produces practical non-clinical signals, a startup mode, and a real text
   theme plan.
 - Theme approval supports `/approve`, `/change <request>`, `/regenerate`, and `/skip`.
 - Mindfulness, verse, innovation, work ramp, and applying remain text-first.
+- Verse selection uses a local public-domain KJV/ASV/WEB-ready catalog with recent
+  reference history.
+- Innovation uses a local scenario bank and offline yes-and loop by default. An optional
+  OpenAI improv response is available only when explicitly enabled with environment
+  variables, and raw check-in text is not sent.
 - After the innovation takeaway, ChaseOS creates a text-free Display 1 art plan
   seeded only by the public-safe innovation takeaway.
 - Display 1 art approval supports `/approve`, `/change <request>`, `/regenerate`,
@@ -95,11 +101,13 @@ ChaseOS will ask:
 how are you, really?
 ```
 
-Answer in plain language. The Phase 8 engine interprets the answer locally into
-practical work-start signals, then asks you to approve, change, regenerate, or skip the
-text-only theme plan. Later in the ritual, your innovation takeaway is converted to a
-public-safe seed for text-free Display 1 generated art. At the end, ChaseOS generates
-private wallpapers from the selected theme only.
+Answer in plain language. ChaseOS interprets the answer locally into practical
+work-start signals. If the answer is vague, it may ask up to three short follow-ups
+before showing the theme plan. Later in the ritual, the verse step uses a local
+public-domain catalog, and the innovation step runs an improv loop until you capture
+the insight with `/takeaway <text>`. That takeaway is converted to a public-safe seed
+for text-free Display 1 generated art. At the end, ChaseOS generates private wallpapers
+from the selected theme only.
 
 ## Local Interpretation
 
@@ -112,6 +120,7 @@ ChaseOS interprets check-ins only into practical signals:
 - `focus_friction`
 - `body_context`
 - `social_battery`
+- `drive`
 - `readiness`
 
 Startup modes:
@@ -260,7 +269,8 @@ Commands:
   exists.
 - `/apply wallpapers` previews the per-monitor application plan.
 - `/apply wallpapers --dry-run` previews the per-monitor application plan.
-- `/apply wallpapers --confirm` applies wallpapers to Windows per monitor.
+- `/apply wallpapers --confirm` applies wallpapers to Windows per monitor, verifies
+  each monitor by read-back, and reports any unverified or failed monitor.
 - `/reset wallpapers` restores the previous per-monitor wallpapers when rollback state
   exists.
 
@@ -376,6 +386,9 @@ Safety rules:
 - `/verify wallpapers` and `/wallpaper diagnostics` never apply wallpapers.
 - `/apply wallpapers --confirm` is the only real apply command.
 - ChaseOS saves previous wallpaper state before applying new wallpaper paths.
+- ChaseOS preserves the previous Windows wallpaper position for rollback. If Windows is
+  set to Span, ChaseOS temporarily switches to Fill before per-monitor apply.
+- ChaseOS writes verified and failed target details to `last_apply_manifest.json`.
 - ChaseOS uses the per-monitor Windows wallpaper API.
 - ChaseOS resolves monitor IDs by exact ID, device path, then rectangle.
 - Confirmed apply refuses unresolved Windows monitor IDs.
@@ -724,7 +737,8 @@ Phase 12 safety notes:
 
 ## Current Limitations
 
-- No OpenAI yet.
+- OpenAI is disabled by default. The optional improv client only runs when
+  `CHASEOS_IMPROV_API=1` and `OPENAI_API_KEY` are set.
 - Monitor labels may vary depending on Windows, GPU, and dock behavior.
 - Fallback layout is used if detection fails.
 - Per-monitor wallpaper application requires Windows IDesktopWallpaper support.
@@ -737,14 +751,16 @@ Phase 12 safety notes:
 - Do not use clinical labels.
 - Interpret check-ins only into practical work-start signals:
   `energy`, `clarity`, `pressure`, `mood_weight`, `focus_friction`, `body_context`,
-  `social_battery`, and `readiness`.
+  `social_battery`, `drive`, and `readiness`.
 - Display 1 public art must never include private check-in details or readable text.
 - Display 1 public art must be seeded only from the public-safe innovation takeaway.
 - Public seed text must redact ticket numbers, hostnames, URLs, emails, IPs, usernames,
   company names, internal systems, credentials, and private health details.
 - Do not require admin rights.
 - Do not apply wallpapers without `/apply wallpapers --confirm`.
-- Do not call OpenAI, edit registry settings, restart Explorer, or programmatically pin to the taskbar.
+- Do not send raw check-in text to OpenAI. The optional OpenAI path is limited to the
+  innovation improv volley and is disabled by default.
+- Do not edit registry settings, restart Explorer, or programmatically pin to the taskbar.
 
 ## Monitor Layout
 

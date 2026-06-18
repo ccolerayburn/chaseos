@@ -5,6 +5,7 @@ import pytest
 from PIL import Image
 
 from chaseos.models.monitor import MonitorRole
+from chaseos.models.signals import ClarityLevel, Drive, PressureLevel, StartupMode
 from chaseos.ritual.stages import RitualStage
 from chaseos.ritual.startup_sequence import StartupSequence
 from chaseos.storage.daily_session_store import DailySessionStore
@@ -27,6 +28,8 @@ def render_response_text(response) -> str:
 def advance_to_theme_approval(sequence: StartupSequence) -> None:
     sequence.handle_input("/start")
     sequence.handle_input("tired and scattered but ready to work")
+    if sequence.current_stage == RitualStage.CHECK_IN_FOLLOW_UP:
+        sequence.handle_input("open")
 
 
 def advance_to_poster_approval(sequence: StartupSequence) -> None:
@@ -35,11 +38,15 @@ def advance_to_poster_approval(sequence: StartupSequence) -> None:
     sequence.handle_input("done")
     sequence.handle_input("done")
     sequence.handle_input("we keep repeating the same troubleshooting questions")
+    sequence.handle_input("/takeaway we keep repeating the same troubleshooting questions")
 
 
 class FakeDesktopWallpaper:
     def __init__(self) -> None:
         self.set_calls: list[tuple[str, str]] = []
+        self.wallpapers: dict[str, str] = {}
+        self.position = 3
+        self.position_calls: list[int] = []
 
     def list_monitors(self) -> tuple[str, ...]:
         return tuple(monitor.monitor_id for monitor in self.describe_monitors())
@@ -53,10 +60,18 @@ class FakeDesktopWallpaper:
         )
 
     def get_wallpaper(self, monitor_id: str) -> str | None:
-        return None
+        return self.wallpapers.get(monitor_id)
 
     def set_wallpaper(self, monitor_id: str, image_path: str) -> None:
         self.set_calls.append((monitor_id, image_path))
+        self.wallpapers[monitor_id] = image_path
+
+    def get_position(self) -> int:
+        return self.position
+
+    def set_position(self, position: int) -> None:
+        self.position = int(position)
+        self.position_calls.append(int(position))
 
 
 def isolated_sequence(tmp_path) -> StartupSequence:
@@ -103,7 +118,7 @@ def test_daily_session_persistence_writes_practical_state_without_raw_check_in(t
 
     session_path = get_daily_session_path(base_path=tmp_path)
     payload = json.loads(session_path.read_text(encoding="utf-8"))
-    assert payload["current_stage"] == "THEME_APPROVAL"
+    assert payload["current_stage"] == "CHECK_IN_FOLLOW_UP"
     assert payload["practical_signals"]
     assert "raw_check_in" not in payload
     assert raw_check_in not in session_path.read_text(encoding="utf-8")
@@ -115,10 +130,54 @@ def test_after_check_in_sequence_reaches_theme_approval() -> None:
     advance_to_theme_approval(sequence)
 
     assert sequence.current_stage == RitualStage.THEME_APPROVAL
-    assert sequence.session.startup_mode == "Structured Start"
+    assert sequence.session.startup_mode == "Calm Start"
     assert sequence.session.signals is not None
     assert sequence.session.theme_plan is not None
     assert sequence.session.current_theme_plan.startswith("THEME PLAN")
+
+
+def test_vague_check_in_triggers_follow_ups_and_caps_at_three() -> None:
+    sequence = StartupSequence()
+    sequence.handle_input("/start")
+
+    first = sequence.handle_input("meh")
+
+    assert sequence.current_stage == RitualStage.CHECK_IN_FOLLOW_UP
+    assert "follow-up 1/3" in render_response_text(first)
+    for answer in ("blank", "hard deadline", "switching", "fine"):
+        sequence.handle_input(answer)
+        if sequence.current_stage == RitualStage.THEME_APPROVAL:
+            break
+
+    assert len(sequence.session.asked_follow_ups) <= 3
+    assert sequence.current_stage == RitualStage.THEME_APPROVAL
+    assert sequence.session.signals is not None
+    assert sequence.session.signals.clarity != ClarityLevel.UNKNOWN
+    assert sequence.session.signals.pressure != PressureLevel.UNKNOWN
+
+
+def test_rich_check_in_skips_follow_ups() -> None:
+    sequence = StartupSequence()
+    sequence.handle_input("/start")
+
+    response = sequence.handle_input("clear calm focused rested and ready to build something great")
+
+    assert sequence.current_stage == RitualStage.THEME_APPROVAL
+    assert "follow-up" not in render_response_text(response)
+
+
+def test_high_drive_check_in_routes_to_momentum_start() -> None:
+    sequence = StartupSequence()
+    sequence.handle_input("/start")
+
+    sequence.handle_input(
+        "clear calm focused rested and excited about accomplishing something great "
+        "that can change my life and this business"
+    )
+
+    assert sequence.session.signals is not None
+    assert sequence.session.signals.drive == Drive.HIGH
+    assert sequence.session.startup_mode == StartupMode.MOMENTUM.value
 
 
 def test_approve_from_theme_approval_moves_to_mindfulness() -> None:
@@ -249,10 +308,12 @@ def test_full_happy_path_reaches_complete(tmp_path) -> None:
     for user_input in (
         "/start",
         "tired and scattered but ready to work",
+        "open",
         "/approve",
         "done",
         "done",
         "we keep repeating the same troubleshooting questions",
+        "/takeaway we keep repeating the same troubleshooting questions",
         "/approve",
         "done",
     ):
@@ -273,11 +334,12 @@ def test_applying_stage_prints_generated_private_wallpaper_paths(tmp_path) -> No
     sequence = isolated_sequence(tmp_path)
     for user_input in (
         "/start",
-        "clear and focused",
+        "clear calm focused rested and ready",
         "/approve",
         "done",
         "done",
         "we keep repeating the same troubleshooting questions",
+        "/takeaway we keep repeating the same troubleshooting questions",
         "/approve",
     ):
         sequence.handle_input(user_input)
@@ -300,11 +362,12 @@ def test_wallpapers_command_prints_paths_after_generation(tmp_path) -> None:
     sequence = isolated_sequence(tmp_path)
     for user_input in (
         "/start",
-        "clear and focused",
+        "clear calm focused rested and ready",
         "/approve",
         "done",
         "done",
         "we keep repeating the same troubleshooting questions",
+        "/takeaway we keep repeating the same troubleshooting questions",
         "/approve",
         "done",
     ):
@@ -343,7 +406,7 @@ def test_daily_status_reports_existing_session_without_raw_check_in_text(tmp_pat
     response = sequence.handle_input("/daily status")
     text = render_response_text(response)
 
-    assert "current stage: THEME_APPROVAL" in text
+    assert "current stage: CHECK_IN_FOLLOW_UP" in text
     assert "theme approved: no" in text
     assert raw_check_in not in text
 
@@ -376,7 +439,7 @@ def test_resume_reports_no_session_clearly(tmp_path) -> None:
 def test_resume_loads_todays_session(tmp_path) -> None:
     sequence = isolated_sequence(tmp_path)
     sequence.handle_input("/start")
-    sequence.handle_input("clear and ready")
+    sequence.handle_input("clear calm focused rested and ready")
     resumed = isolated_sequence(tmp_path)
 
     response = resumed.handle_input("/resume")
@@ -391,11 +454,12 @@ def test_daily_status_detects_today_assets_without_session(tmp_path) -> None:
     sequence = isolated_sequence(tmp_path)
     for user_input in (
         "/start",
-        "clear and focused",
+        "clear calm focused rested and ready",
         "/approve",
         "done",
         "done",
         "Clear handoffs reduce repeated work.",
+        "/takeaway Clear handoffs reduce repeated work.",
         "/approve",
         "done",
     ):
@@ -418,11 +482,12 @@ def test_ritual_does_not_apply_wallpapers_automatically(tmp_path) -> None:
     )
     for user_input in (
         "/start",
-        "clear and focused",
+        "clear calm focused rested",
         "/approve",
         "done",
         "done",
         "Clear handoffs reduce repeated work.",
+        "/takeaway Clear handoffs reduce repeated work.",
         "/approve",
         "done",
     ):
@@ -440,11 +505,12 @@ def test_approve_at_work_ramp_does_not_apply_wallpapers(tmp_path) -> None:
     )
     for user_input in (
         "/start",
-        "clear and focused",
+        "clear calm focused rested",
         "/approve",
         "done",
         "done",
         "Clear handoffs reduce repeated work.",
+        "/takeaway Clear handoffs reduce repeated work.",
         "/approve",
     ):
         sequence.handle_input(user_input)
@@ -456,7 +522,7 @@ def test_approve_at_work_ramp_does_not_apply_wallpapers(tmp_path) -> None:
 
 
 def test_daily_summary_file_is_written_when_ritual_generates_assets(tmp_path) -> None:
-    raw_check_in = "private check in should not land in summary"
+    raw_check_in = "clear calm focused rested with private check in detail"
     sequence = isolated_sequence(tmp_path)
     for user_input in (
         "/start",
@@ -465,6 +531,7 @@ def test_daily_summary_file_is_written_when_ritual_generates_assets(tmp_path) ->
         "done",
         "done",
         "Clear handoffs reduce repeated work.",
+        "/takeaway Clear handoffs reduce repeated work.",
         "/approve",
         "done",
     ):
@@ -496,11 +563,12 @@ def test_export_support_redacted_creates_zip_with_metadata_only(tmp_path) -> Non
     sequence = isolated_sequence(tmp_path)
     for user_input in (
         "/start",
-        "private startup details",
+        "clear calm focused rested with private startup details",
         "/approve",
         "done",
         "done",
         "Clear handoffs reduce repeated work.",
+        "/takeaway Clear handoffs reduce repeated work.",
         "/approve",
         "done",
     ):
@@ -638,7 +706,7 @@ def test_index_photos_then_generate_wallpapers_uses_hybrid_for_four_and_three(
         photo_config=PhotoSourceConfig(source_path=source),
     )
     sequence.handle_input("/start")
-    sequence.handle_input("clear and energized")
+    sequence.handle_input("clear calm focused rested and energized")
     sequence.handle_input("/change use more local photos")
     sequence.handle_input("/index photos")
 
@@ -777,10 +845,12 @@ def test_public_poster_plan_and_metadata_do_not_contain_raw_check_in(tmp_path) -
     sequence = isolated_sequence(tmp_path)
     sequence.handle_input("/start")
     sequence.handle_input(raw_check_in)
+    sequence.handle_input("open")
     sequence.handle_input("/approve")
     sequence.handle_input("done")
     sequence.handle_input("done")
     sequence.handle_input("VPN tickets keep missing hostname and username")
+    sequence.handle_input("/takeaway VPN tickets keep missing hostname and username")
     sequence.handle_input("/approve")
 
     assert raw_check_in not in sequence.session.current_poster_plan
@@ -795,10 +865,12 @@ def test_wallpaper_manifest_does_not_contain_raw_check_in_or_innovation_takeaway
     sequence = isolated_sequence(tmp_path)
     sequence.handle_input("/start")
     sequence.handle_input(raw_check_in)
+    sequence.handle_input("open")
     sequence.handle_input("/approve")
     sequence.handle_input("done")
     sequence.handle_input("done")
     sequence.handle_input(innovation_takeaway)
+    sequence.handle_input(f"/takeaway {innovation_takeaway}")
     sequence.handle_input("/approve")
     sequence.handle_input("done")
 
@@ -811,7 +883,7 @@ def test_wallpaper_manifest_does_not_contain_raw_check_in_or_innovation_takeaway
 
 
 def test_poster_rendered_text_does_not_contain_raw_check_in(tmp_path) -> None:
-    raw_check_in = "headache and private check in detail"
+    raw_check_in = "clear calm focused rested with headache and private check in detail"
     sequence = isolated_sequence(tmp_path)
     sequence.handle_input("/start")
     sequence.handle_input(raw_check_in)
@@ -819,6 +891,7 @@ def test_poster_rendered_text_does_not_contain_raw_check_in(tmp_path) -> None:
     sequence.handle_input("done")
     sequence.handle_input("done")
     sequence.handle_input("Clear handoffs reduce repeated work.")
+    sequence.handle_input("/takeaway Clear handoffs reduce repeated work.")
     sequence.handle_input("/approve")
 
     assert sequence.session.poster_plan is not None
